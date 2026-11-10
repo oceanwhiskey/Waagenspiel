@@ -188,6 +188,10 @@ def forces_lighter(scales: Iterable[Scale], lighter: int, heavier: int) -> bool:
     prueft :func:`heaviest` die Erfuellbarkeit vorher.
     """
 
+    scales = list(scales)
+    for weights in _SAMPLES:  # schneller Gegenbeispiel-Test vor Z3
+        if weights[lighter] >= weights[heavier] and all(s.holds(weights) for s in scales):
+            return False
     return _solver(scales, [_W[lighter] >= _W[heavier]]).check() == z3.unsat
 
 
@@ -316,7 +320,7 @@ class Use:
     """Eine Waage, wie sie im Loesungsweg benutzt wird (Gleichgewichte
     gegebenenfalls andersherum gelesen), ``count``-mal genommen."""
 
-    number: int
+    label: str
     left: Side
     operator: Operator
     right: Side
@@ -324,7 +328,7 @@ class Use:
 
     def __str__(self) -> str:
         prefix = f"{self.count}-mal " if self.count > 1 else ""
-        return f"{prefix}Waage {self.number}: {side_text(self.left)} {self.operator} {side_text(self.right)}"
+        return f"{prefix}{self.label}: {side_text(self.left)} {self.operator} {side_text(self.right)}"
 
 
 @dataclass(frozen=True)
@@ -346,7 +350,7 @@ class Derivation:
 
     @property
     def scale_copies(self) -> int:
-        """Wie viele Waagen insgesamt addiert werden (Mass fuer die Schwierigkeit)."""
+        """Wie viele Waagen insgesamt addiert werden."""
 
         return sum(use.count for use in self.uses)
 
@@ -394,19 +398,25 @@ class Derivation:
         return {"lighter": NAMES[self.lighter], "heavier": NAMES[self.heavier], "steps": self.steps()}
 
 
-def derive(scales: Sequence[Scale], lighter: int, heavier: int) -> Derivation:
+def derive(
+    scales: Sequence[Scale], lighter: int, heavier: int, labels: Sequence[str] | None = None
+) -> Derivation:
     """Einfachster Loesungsweg fuer ``lighter < heavier``.
 
     Zuerst wird die kleinste Teilmenge der Waagen gesucht, die die Aussage
     schon erzwingt. Auf ihr bestimmt ein lineares Programm Faktoren nach
-    Satz 2 mit moeglichst kleiner Summe.
+    Satz 2 mit moeglichst kleiner Summe. ``labels`` benennt die Waagen im
+    Text (Standard: ``Waage 1``, ``Waage 2``, ...).
     """
+
+    if labels is None:
+        labels = [f"Waage {i}" for i in range(1, len(scales) + 1)]
 
     subset: tuple[int, ...] | None = None
     for size in range(1, len(scales) + 1):
         for candidate in combinations(range(len(scales)), size):
             chosen = [scales[i] for i in candidate]
-            if satisfiable(chosen) and forces_lighter(chosen, lighter, heavier):
+            if forces_lighter(chosen, lighter, heavier) and satisfiable(chosen):
                 subset = candidate
                 break
         if subset is not None:
@@ -453,9 +463,9 @@ def derive(scales: Sequence[Scale], lighter: int, heavier: int) -> Derivation:
         net = (f - b) * factor
         scale = scales[i]
         if net > 0:
-            uses.append(Use(i + 1, scale.left, scale.operator, scale.right, int(net)))
+            uses.append(Use(labels[i], scale.left, scale.operator, scale.right, int(net)))
         elif net < 0:  # Gleichgewicht andersherum gelesen
-            uses.append(Use(i + 1, scale.right, "=", scale.left, int(-net)))
+            uses.append(Use(labels[i], scale.right, "=", scale.left, int(-net)))
     return Derivation(lighter, heavier, tuple(uses), factor)
 
 
@@ -469,30 +479,191 @@ def explain(scales: Sequence[Scale]) -> tuple[Derivation, ...]:
 
 
 # --------------------------------------------------------------------------
+# Schrittweises Loesen und Schwierigkeit
+# --------------------------------------------------------------------------
+
+LEVEL_NAMES = {1: "ablesen", 2: "Kette", 3: "kombinieren", 4: "aufloesen"}
+KNOWN = "bekannt"
+
+
+def _fact(lighter: int, heavier: int) -> Scale:
+    """Ein bekannter Vergleich ``lighter < heavier`` als Waage."""
+
+    left, right = [0, 0, 0, 0], [0, 0, 0, 0]
+    left[lighter], right[heavier] = 1, 1
+    return Scale(tuple(left), "<", tuple(right))  # type: ignore[arg-type]
+
+
+@dataclass(frozen=True)
+class Step:
+    """Ein Loesungsschritt: zeigt ``lighter < heavier`` aus Waagen und
+    bereits bekannten Vergleichen."""
+
+    lighter: int
+    heavier: int
+    derivation: Derivation
+
+    @property
+    def fact(self) -> str:
+        return f"{NAMES[self.lighter]} < {NAMES[self.heavier]}"
+
+    @property
+    def requires(self) -> tuple[tuple[int, int], ...]:
+        """Die benutzten bekannten Vergleiche als (leichter, schwerer)."""
+
+        return tuple(
+            (use.left.index(1), use.right.index(1)) for use in self.derivation.uses if use.label == KNOWN
+        )
+
+    def lines(self) -> list[str]:
+        return self.derivation.steps()
+
+    def to_json(self) -> dict[str, object]:
+        return {
+            "fact": self.fact,
+            "uses": sorted({use.label for use in self.derivation.uses if use.label != KNOWN}),
+            "requires": [f"{NAMES[u]} < {NAMES[v]}" for u, v in self.requires],
+            "lines": self.lines(),
+        }
+
+
+@dataclass(frozen=True)
+class Solution:
+    """Loesungsweg in Schritten und die Schwierigkeitsstufe.
+
+    Stufe 1 (ablesen): Jeder Vergleich mit dem Schwersten folgt aus einer
+    einzigen Waage. Stufe 2 (Kette): Jeder Schritt braucht hoechstens eine
+    Waage plus bekannte Vergleiche. Stufe 3 (kombinieren): Manche Schritte
+    brauchen zwei Waagen gleichzeitig. Stufe 4 (aufloesen): Es gelingt erst mit
+    allen drei Waagen zugleich; man muss das Gleichungssystem loesen.
+    """
+
+    top: int
+    level: int
+    steps: tuple[Step, ...]
+
+    @property
+    def level_name(self) -> str:
+        return LEVEL_NAMES[self.level]
+
+    def steps_for(self, lighter: int) -> list[Step]:
+        """Die Schritte, die man fuer ``lighter < Schwerster`` braucht."""
+
+        by_fact = {(step.lighter, step.heavier): step for step in self.steps}
+        needed: set[tuple[int, int]] = set()
+        todo = [(lighter, self.top)]
+        while todo:
+            pair = todo.pop()
+            if pair not in needed:
+                needed.add(pair)
+                todo.extend(by_fact[pair].requires)
+        return [step for step in self.steps if (step.lighter, step.heavier) in needed]
+
+
+def _closure(
+    scales: Sequence[Scale],
+    candidates: Sequence[tuple[int, int]],
+    max_size: int,
+    known: dict[tuple[int, int], tuple[int, ...]],
+) -> None:
+    """Leitet Vergleiche ab, solange es geht. Jeder Schritt darf hoechstens
+    ``max_size`` Waagen und alle schon bekannten Vergleiche benutzen.
+    ``known`` wird ergaenzt (Vergleich -> benutzte Waagen) und behaelt die
+    Reihenfolge der Ableitung."""
+
+    # Kleine Schritte zuerst: wenige Waagen, und bei gleich vielen Waagen
+    # zuerst ohne bekannte Vergleiche. So entsteht z. B. erst d < a aus zwei
+    # Waagen und danach b < a aus einer Waage plus bekannten Vergleichen,
+    # statt b < a umstaendlich aus zwei Waagen.
+    phases = [(0, True)] + [(size, with_facts) for size in range(1, max_size + 1) for with_facts in (False, True)]
+    changed = True
+    while changed:
+        changed = False
+        for size, with_facts in phases:
+            for subset in combinations(range(len(scales)), size):
+                base = [scales[i] for i in subset]
+                if with_facts:
+                    base += [_fact(*pair) for pair in known]
+                if not base:
+                    continue
+                for pair in candidates:
+                    if pair not in known and forces_lighter(base, *pair):
+                        known[pair] = subset
+                        changed = True
+                        break
+                if changed:
+                    break
+            if changed:
+                break  # wieder mit dem kleinsten Schritt anfangen
+
+
+def solve(scales: Sequence[Scale]) -> Solution:
+    """Loest das Raetsel schrittweise wie ein Mensch und bestimmt die Stufe."""
+
+    top = heaviest(scales)
+    if top is None:
+        raise ValueError("Der Schwerste ist nicht eindeutig")
+    solver = _solver(scales)
+    solver.check()
+    model = solver.model()
+    values = [model.eval(w, model_completion=True).as_fraction() for w in _W]
+    # Nur Vergleiche, die in einer Loesung gelten, koennen erzwungen sein.
+    candidates = [(u, v) for u in range(4) for v in range(4) if values[u] < values[v]]
+    goals = [(x, top) for x in range(4) if x != top]
+
+    known: dict[tuple[int, int], tuple[int, ...]] = {}
+    _closure(scales, candidates, 1, known)
+    level = 2 if all(goal in known for goal in goals) else 0
+    if level == 2 and all(any(forces_lighter([s], x, top) for s in scales) for x, _ in goals):
+        level = 1
+    if not level:
+        _closure(scales, candidates, 2, known)
+        level = 3 if all(goal in known for goal in goals) else 4
+
+    order = list(known)
+    built: dict[tuple[int, int], Step] = {}
+
+    def build(pair: tuple[int, int]) -> None:
+        if pair in built:
+            return
+        if pair in known:
+            subset, earlier = known[pair], order[: order.index(pair)]
+        else:  # Stufe 4: alle Waagen zugleich
+            subset, earlier = tuple(range(len(scales))), order
+        items = [scales[i] for i in subset] + [_fact(*p) for p in earlier]
+        labels = [f"Waage {i + 1}" for i in subset] + [KNOWN] * len(earlier)
+        step = Step(*pair, derive(items, *pair, labels))
+        for requirement in step.requires:
+            build(requirement)
+        built[pair] = step
+
+    for goal in goals:
+        build(goal)
+    return Solution(top, level, tuple(built.values()))
+
+
+# --------------------------------------------------------------------------
 # Raetsel und Generator
 # --------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
 class Puzzle:
-    """Ein kanonisches Raetsel: ``a`` ist der Schwerste."""
+    """Ein Raetsel mit Beispielgewichten und schrittweisem Loesungsweg."""
 
     scales: tuple[Scale, ...]
     weights: tuple[int, ...]
-    derivations: tuple[Derivation, ...]
+    solution: Solution
 
     @property
     def difficulty(self) -> int:
-        """Groesste Zahl addierter Waagen in einem der drei Loesungswege.
+        """Stufe 1 bis 4, siehe :class:`Solution`."""
 
-        1: direkt ablesen oder weglassen, 2: zwei Waagen kombinieren,
-        3 und mehr: Waagen mehrfach nehmen.
+        return self.solution.level
 
-        Das ist eine Faustregel: :func:`derive` minimiert die Summe der
-        Faktoren vor dem Ganzzahligmachen, nicht die Zahl der Kopien danach.
-        """
-
-        return max(d.scale_copies for d in self.derivations)
+    @property
+    def heaviest(self) -> int:
+        return self.solution.top
 
     def renamed(self, permutation: Permutation, order: Sequence[int] | None = None) -> "Puzzle":
         """Benennt die Gegenstaende um und ordnet die Waagen optional neu.
@@ -504,11 +675,7 @@ class Puzzle:
         if order is not None:
             scales = [scales[i] for i in order]
         weights = _rename_weights(self.weights, permutation)
-        return Puzzle(tuple(scales), weights, explain(scales))
-
-    @property
-    def heaviest(self) -> int:
-        return self.derivations[0].heavier
+        return Puzzle(tuple(scales), weights, solve(scales))
 
     def to_json(self) -> dict[str, object]:
         return {
@@ -516,7 +683,8 @@ class Puzzle:
             "heaviest": NAMES[self.heaviest],
             "example_weights": dict(zip(NAMES, self.weights)),
             "difficulty": self.difficulty,
-            "hints": [d.to_json() for d in self.derivations],
+            "difficulty_name": self.solution.level_name,
+            "steps": [step.to_json() for step in self.solution.steps],
         }
 
 
@@ -569,13 +737,14 @@ class Settings:
     balance_share: float = 0.25
     allow_multiples: bool = False
     min_difficulty: int = 1
-    max_difficulty: int = 99
+    max_difficulty: int = 4
 
 
 LEVELS: dict[str, Settings] = {
     "leicht": Settings(scale_counts=(3,), max_side=1),
     "mittel": Settings(scale_counts=(2, 3), max_side=2, max_difficulty=2),
-    "schwer": Settings(scale_counts=(2, 3), max_side=3, min_difficulty=3, max_difficulty=6),
+    "schwer": Settings(scale_counts=(2, 3), max_side=3, min_difficulty=3, max_difficulty=3),
+    "experte": Settings(scale_counts=(3,), max_side=3, min_difficulty=4),
 }
 
 
@@ -637,7 +806,7 @@ class PuzzleGenerator:
         permutation, key = canonical_form(scales)
         if key in self.seen:
             return None
-        puzzle = Puzzle(key, _rename_weights(weights, permutation), explain(key))
+        puzzle = Puzzle(key, _rename_weights(weights, permutation), solve(key))
         if not settings.min_difficulty <= puzzle.difficulty <= settings.max_difficulty:
             return None
         self.seen.add(key)

@@ -253,10 +253,8 @@ Rätsel lassen sich direkt erzeugen:
 5. Speichere die Schlüssel aus 4.1, um Wiederholungen zu vermeiden.
 6. Zeige bei Bedarf das Farkas-Zertifikat aus 3.2 als Lösungsweg.
 
-Die Schwierigkeit lässt sich über die Anzahl der Gegenstände pro Seite, die
-Anzahl der Waagen und die Größe der Faktoren $\lambda$ im Zertifikat steuern.
-Ein Rätsel, dessen Zertifikat nur Streichen braucht, ist leicht; eines, bei dem
-man Waagen addieren muss, ist schwer.
+Die Schwierigkeit wird über die Anzahl der Gegenstände pro Seite und die
+Stufe aus Abschnitt 8 gesteuert.
 
 ## 7. Umsetzung
 
@@ -265,7 +263,7 @@ Kommandozeile in `raetsel.py`:
 
 ```bash
 python raetsel.py erzeugen --anzahl 20 --stufe mittel --ausgabe data/raetsel.json
-python raetsel.py erzeugen --anzahl 5 --stufe schwer --mit-loesung
+python raetsel.py erzeugen --anzahl 5 --stufe experte --mit-loesung
 python raetsel.py spielen --stufe leicht
 ```
 
@@ -273,7 +271,8 @@ python raetsel.py spielen --stufe leicht
 |---|---|---|
 | Waage in Normalform | `Scale` | 2, 4.1 |
 | Eindeutig Schwerster | `heaviest`, `forces_heaviest` | 3, 3.1 |
-| Lösungsweg | `derive`, `explain`, `Derivation.steps` | 3.2 |
+| Lösungsweg eines Vergleichs | `derive`, `Derivation.steps` | 3.2 |
+| Lösen in Schritten, Stufe | `solve`, `Solution`, `Step` | 8 |
 | Gleichheit | `canonical_form` | 4.1 |
 | Keine überflüssige Waage | `is_minimal` | 4.2 |
 | Generator | `PuzzleGenerator` | 6 |
@@ -288,19 +287,77 @@ Ergänzungen gegenüber Abschnitt 6:
   nicht erzeugt (ggT der Koeffizienten größer als 1). Sie sind nur verkleidete
   einfachere Waagen. Mit `Settings(allow_multiples=True)` lassen sie sich
   zulassen.
-- **Schwierigkeit.** Für jeden der drei Vergleiche mit dem Schwersten wird
-  zuerst die kleinste Teilmenge der Waagen gesucht, die ihn erzwingt, und auf
-  ihr ein Farkas-Zertifikat mit möglichst kleiner Faktorsumme. Die
-  Schwierigkeit ist die größte Zahl addierter Waagen. Das ist eine Faustregel,
-  kein bewiesenes Minimum.
-- **Stufen.** `leicht`: ein Gegenstand pro Seite und drei Waagen (mit zwei
-  geht es nach Satz 3 nicht). `mittel`: bis zu zwei Gegenstände pro Seite,
-  Schwierigkeit höchstens 2. `schwer`: bis zu drei Gegenstände pro Seite,
-  Schwierigkeit 3 bis 6. Ohne Obergrenze entstehen korrekte, aber kaum von Hand
-  lösbare Rätsel mit über zehn addierten Waagen.
+- **Spielstufen.** Jedes Rätsel hat zwei oder drei Waagen.
+
+  | `--stufe` | Gegenstände pro Seite | Waagen | Stufe nach Abschnitt 8 |
+  |---|---|---|---|
+  | `leicht` | 1 | 3 (mit zwei geht es nach Satz 3 nicht) | 1–2 |
+  | `mittel` | bis 2 | 2 oder 3 | 1–2 |
+  | `schwer` | bis 3 | 2 oder 3 | 3 |
+  | `experte` | bis 3 | 3 | 4 |
 - **Ausgabe.** Rätsel werden kanonisch gespeichert, also immer mit $a$ als
   Schwerstem. Im Spielmodus werden Namen und Reihenfolge der Waagen zufällig
   gemischt.
+
+## 8. Schwierigkeit: Lösen in Schritten
+
+### 8.1 Warum nicht die Größe der Faktoren
+
+Ein erster Ansatz hat als Schwierigkeit gezählt, wie viele Waagen das
+Farkas-Zertifikat aus 3.2 insgesamt addiert. Das misst aber vor allem, wie
+hässlich die Brüche werden. Beim Rätsel
+
+$$
+2d < 3c, \qquad 3b < c + d, \qquad 2a = 3c
+$$
+
+addiert das Zertifikat für $b < a$ insgesamt 22 Waagen. Ein Mensch rechnet
+dagegen in Ketten: aus $2a = 3c$ folgt $c < a$, aus $2d < 3c = 2a$ folgt
+$d < a$, und aus $3b < c + d < 2a$ folgt $b < a$.
+
+### 8.2 Definition
+
+Ein Mensch leitet nacheinander einfache Vergleiche $u < v$ zwischen zwei
+Gegenständen her und benutzt sie in späteren Schritten weiter. Ein
+**Schritt** zeigt einen solchen Vergleich aus einigen Waagen und den schon
+bekannten Vergleichen. Ob er gelingt, entscheidet Satz 1, angewandt auf diese
+Waagen plus die bekannten Vergleiche als zusätzliche Waagen.
+
+Die **Stufe** eines Rätsels ist:
+
+| Stufe | Name | Bedingung |
+|---|---|---|
+| 1 | ablesen | Jeder Vergleich $x < a$ folgt aus einer einzigen Waage. |
+| 2 | Kette | Alle $x < a$ lassen sich in Schritten zeigen, die je höchstens eine Waage benutzen (plus bekannte Vergleiche). |
+| 3 | kombinieren | Dafür braucht mindestens ein Schritt zwei Waagen gleichzeitig. |
+| 4 | auflösen | Selbst das reicht nicht; man muss alle drei Waagen zugleich verrechnen, also das Gleichungssystem lösen. |
+
+Stufe 4 kann es nur bei drei Waagen geben. Rätsel mit einem Gegenstand pro
+Seite sind nach Satz 3 immer Stufe 1 oder 2.
+
+Beispiel für Stufe 4:
+
+$$
+c + 2d < 2a + b, \qquad b + 2d = 3c, \qquad a + b + c = 3d .
+$$
+
+Aus keiner Waage und keinem Paar von Waagen folgt ein einfacher Vergleich.
+Man muss auflösen: $b = 3c - 2d$, dann $a = 5d - 4c$, eingesetzt in die erste
+Waage $6c < 6d$. Daraus folgen $c < d < a$ und $b < c$.
+
+### 8.3 Berechnung
+
+`solve` sammelt die Vergleiche, die in einer Lösung gelten, als Kandidaten und
+leitet sie in Schritten ab, bis nichts Neues mehr folgt. Kleine Schritte
+kommen zuerst: wenige Waagen, und bei gleich vielen Waagen zuerst ohne
+bekannte Vergleiche. Erst wenn das mit einer Waage pro Schritt nicht alle
+$x < a$ liefert, sind zwei Waagen pro Schritt erlaubt. Für jeden benötigten
+Schritt erzeugt `derive` den Text wie in 3.2; bekannte Vergleiche erscheinen
+dort als „bekannt: c < a“. Diese Schritte sind zugleich die Hinweise im
+Spielmodus.
+
+Die Stufe ist exakt im Sinne der Definition. Die Reihenfolge der Schritte und
+damit der Lösungsweg ist eine Heuristik und nicht immer der kürzeste.
 
 ## Anhang: Prüfskript
 

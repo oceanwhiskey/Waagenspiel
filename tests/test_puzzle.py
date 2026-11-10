@@ -22,6 +22,7 @@ from waagenspiel.puzzle import (
     heaviest,
     is_minimal,
     satisfiable,
+    solve,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -176,6 +177,59 @@ def test_graph_theorem_matches_the_linear_test() -> None:
         assert heaviest(scales(*texts)) == _graph_criterion(system), texts
 
 
+# --- Stufen (Abschnitt 8) ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("texts", "level"),
+    [
+        (("b + c < a", "d < a"), 1),
+        (("d < c", "c < b", "b < a"), 2),
+        (("3d < 2a + c", "b + c < a"), 2),
+        (("2d < 3c", "3b < c + d", "2a = 3c"), 3),
+        (("c + 2d < 2a + b", "b + 2d = 3c", "a + b + c = 3d"), 4),
+    ],
+)
+def test_levels(texts: tuple[str, ...], level: int) -> None:
+    solution = solve(scales(*texts))
+    assert solution.level == level
+    assert solution.top == 0
+    facts = {(step.lighter, step.heavier) for step in solution.steps}
+    assert {(1, 0), (2, 0), (3, 0)} <= facts
+    for step in solution.steps:
+        assert_valid(step.derivation)
+        # Jeder benutzte bekannte Vergleich wird vorher gezeigt.
+        earlier = {(s.lighter, s.heavier) for s in solution.steps[: solution.steps.index(step)]}
+        assert set(step.requires) <= earlier
+
+
+def test_level_three_uses_short_chain_for_b() -> None:
+    solution = solve(scales("2d < 3c", "3b < c + d", "2a = 3c"))
+    by_fact = {step.fact: step for step in solution.steps}
+    assert by_fact["c < a"].lines()[0] == "Waage 3: 3c = 2a"
+    assert by_fact["b < a"].requires  # b < a wird aus bekannten Vergleichen gefolgert
+    chain = solution.steps_for(1)
+    assert chain[-1].fact == "b < a"
+    assert {step.fact for step in chain} <= set(by_fact)
+
+
+def test_single_item_puzzles_are_at_most_level_two() -> None:
+    rng = random.Random(9)
+    checked = 0
+    while checked < 40:
+        system = [(rng.choice("<="), *rng.sample(range(4), 2)) for _ in range(3)]
+        texts = [f"{'abcd'[x]} {op} {'abcd'[y]}" for op, x, y in system]
+        if heaviest(scales(*texts)) is None:
+            continue
+        assert solve(scales(*texts)).level <= 2, texts
+        checked += 1
+
+
+def test_two_scales_are_at_most_level_three() -> None:
+    for puzzle in PuzzleGenerator(Settings(scale_counts=(2,), max_side=3), seed=6).generate(6):
+        assert puzzle.difficulty <= 3
+
+
 # --- Gleichheit ---------------------------------------------------------------
 
 
@@ -221,8 +275,8 @@ def test_generated_puzzles_are_valid_and_distinct(level: str) -> None:
         assert heaviest(list(puzzle.scales)) == 0 == puzzle.heaviest
         assert is_minimal(list(puzzle.scales))
         assert settings.min_difficulty <= puzzle.difficulty <= settings.max_difficulty
-        for derivation in puzzle.derivations:
-            assert_valid(derivation)
+        for step in puzzle.solution.steps:
+            assert_valid(step.derivation)
         assert canonical_form(list(puzzle.scales))[1] == puzzle.scales
         keys.add(puzzle.scales)
     assert len(keys) == len(puzzles)
@@ -268,7 +322,8 @@ def test_cli_writes_json(tmp_path: Path) -> None:
     assert data["metadata"]["count"] == 2
     puzzle = data["puzzles"][0]
     assert puzzle["heaviest"] == "a"
-    assert len(puzzle["hints"]) == 3
+    assert {"b < a", "c < a", "d < a"} <= {step["fact"] for step in puzzle["steps"]}
+    assert puzzle["difficulty_name"] in {"ablesen", "Kette", "kombinieren", "aufloesen"}
     assert all(Scale.from_mapping(s).holds([puzzle["example_weights"][n] for n in "abcd"]) for s in puzzle["scales"])
 
 

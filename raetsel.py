@@ -3,7 +3,7 @@
 Beispiele:
 
     python raetsel.py erzeugen --anzahl 20 --stufe mittel --ausgabe data/raetsel.json
-    python raetsel.py erzeugen --anzahl 5 --stufe schwer --mit-loesung
+    python raetsel.py erzeugen --anzahl 5 --stufe experte --mit-loesung
     python raetsel.py spielen --stufe leicht
 
 Grundlage ist docs/03_einfache_herleitung.md.
@@ -39,15 +39,15 @@ def settings_from(args: argparse.Namespace) -> Settings:
 
 
 def print_puzzle(number: int, puzzle: Puzzle, *, solution: bool) -> None:
-    print(f"Raetsel {number} (Schwierigkeit {puzzle.difficulty})")
+    print(f"Raetsel {number} (Stufe {puzzle.difficulty}: {puzzle.solution.level_name})")
     for index, scale in enumerate(puzzle.scales, start=1):
         print(f"  Waage {index}:  {scale}")
     if solution:
         print(f"  Am schwersten: {NAMES[puzzle.heaviest]}")
-        for derivation in puzzle.derivations:
-            print(f"  Warum {NAMES[derivation.lighter]} leichter ist:")
-            for step in derivation.steps():
-                print(f"    {step}")
+        for step in puzzle.solution.steps:
+            print(f"  Schritt: {step.fact}")
+            for line in step.lines():
+                print(f"    {line}")
     print()
 
 
@@ -93,7 +93,7 @@ def command_play(args: argparse.Namespace) -> int:
     while args.runden == 0 or played < args.runden:
         puzzle = generator.shuffled(next(generator.generate(1)))
         print_puzzle(played + 1, puzzle, solution=False)
-        hints = list(puzzle.derivations)
+        hints = list(puzzle.solution.steps)
         while True:
             try:
                 answer = input("> ").strip().lower()
@@ -104,10 +104,10 @@ def command_play(args: argparse.Namespace) -> int:
                 return 0
             if answer == "h":
                 if hints:
-                    derivation = hints.pop(0)
-                    print(f"Hinweis: {NAMES[derivation.lighter]} ist nicht der Schwerste.")
-                    for step in derivation.steps():
-                        print(f"  {step}")
+                    step = hints.pop(0)
+                    print(f"Hinweis: {step.fact}")
+                    for line in step.lines():
+                        print(f"  {line}")
                 else:
                     print("Keine weiteren Hinweise.")
                 continue
@@ -119,10 +119,11 @@ def command_play(args: argparse.Namespace) -> int:
                 solved += 1
                 print("Richtig!\n")
             else:
-                derivation = next(d for d in puzzle.derivations if NAMES[d.lighter] == answer)
                 print(f"Leider nein, {NAMES[puzzle.heaviest]} ist am schwersten. Warum {answer} leichter ist:")
-                for step in derivation.steps():
-                    print(f"  {step}")
+                for step in puzzle.solution.steps_for(NAMES.index(answer)):
+                    print(f"  Schritt: {step.fact}")
+                    for line in step.lines():
+                        print(f"    {line}")
                 print()
             break
     print(f"{solved} von {played} Raetseln richtig.")
@@ -132,11 +133,13 @@ def command_play(args: argparse.Namespace) -> int:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--stufe", choices=sorted(LEVELS), default="mittel",
-                        help="leicht: 1 Gegenstand pro Seite; mittel: bis 2; schwer: bis 3 und Waagen kombinieren")
+                        help="leicht: 1 Gegenstand pro Seite; mittel: bis 2, Stufe 1-2; "
+                             "schwer: bis 3, Stufe 3; experte: Stufe 4")
     common.add_argument("--waagen", type=int, nargs="+", choices=(2, 3), help="erlaubte Anzahl Waagen")
     common.add_argument("--max-seite", type=int, choices=(1, 2, 3), help="Gegenstaende pro Seite hoechstens")
-    common.add_argument("--min-schwierigkeit", type=int, help="mindestens so viele addierte Waagen im Loesungsweg")
-    common.add_argument("--max-schwierigkeit", type=int, help="hoechstens so viele addierte Waagen im Loesungsweg")
+    common.add_argument("--min-schwierigkeit", type=int, choices=(1, 2, 3, 4),
+                        help="mindestens diese Stufe (1 ablesen, 2 Kette, 3 kombinieren, 4 aufloesen)")
+    common.add_argument("--max-schwierigkeit", type=int, choices=(1, 2, 3, 4), help="hoechstens diese Stufe")
     common.add_argument("--seed", type=int, help="Zufallsstartwert fuer reproduzierbare Raetsel")
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
