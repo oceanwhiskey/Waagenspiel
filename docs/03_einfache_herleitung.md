@@ -90,6 +90,8 @@ $$
 Pro System sind das **drei** Zulässigkeitstests mit je vier Variablen, dazu
 einer für die Erfüllbarkeit ohne die letzte Zeile. Jeder LP-Löser und jeder
 SMT-Löser (z. B. Z3 mit `Real`-Variablen) erledigt das sofort; siehe Anhang.
+Noch schneller geht es ohne allgemeinen Löser über die Kantenstrahlen des
+Lösungskegels (Abschnitt 11).
 
 ### 3.2 Der Lösungsweg: Farkas-Lemma
 
@@ -258,14 +260,21 @@ Stufe aus Abschnitt 8 gesteuert.
 
 ## 7. Umsetzung
 
-Die Abschnitte 3 bis 6 sind in `src/waagenspiel/puzzle.py` umgesetzt, die
-Kommandozeile in `raetsel.py`:
+Die Abschnitte 3 bis 6 und 8 sind in `src/waagenspiel/puzzle.py` umgesetzt,
+der Katalog (Abschnitt 9) in `src/waagenspiel/catalog.py` und `katalog.py`,
+der Baukasten (Abschnitt 10) in `src/waagenspiel/construct.py`. Die
+Kommandozeile ist `raetsel.py`:
 
 ```bash
 python raetsel.py erzeugen --anzahl 20 --stufe mittel --ausgabe data/raetsel.json
 python raetsel.py erzeugen --anzahl 5 --stufe experte --mit-loesung
 python raetsel.py spielen --stufe leicht
+python raetsel.py spielen --stufe schwer --quelle baukasten
 ```
+
+`--quelle` wählt, woher die Rätsel kommen: `katalog` (Standard,
+gleichverteilt aus allen Rätseln), `baukasten` (gezielt gebaut, Stufen 1 bis
+3) oder `zufall` (blind gezogen und geprüft, Abschnitt 6).
 
 | Baustein | Funktion | Abschnitt |
 |---|---|---|
@@ -275,14 +284,16 @@ python raetsel.py spielen --stufe leicht
 | Lösen in Schritten, Stufe | `solve`, `Solution`, `Step` | 8 |
 | Gleichheit | `canonical_form` | 4.1 |
 | Keine überflüssige Waage | `is_minimal` | 4.2 |
-| Generator | `PuzzleGenerator` | 6 |
+| Zufallsgenerator | `PuzzleGenerator` | 6 |
+| Katalog | `build_catalog`, `CatalogSource` | 9 |
+| Baukasten | `Knowledge`, `ConstructiveGenerator` | 10 |
 
 Ergänzungen gegenüber Abschnitt 6:
 
-- **Schneller Vorfilter.** Bevor Z3 gefragt wird, werden 600 feste
-  Zufallsgewichte eingesetzt. Erfüllt eines davon alle Waagen und hat einen
-  anderen Schwersten, ist das Rätsel sicher widerlegt. Bewiesen wird die
-  Eindeutigkeit immer exakt mit Z3.
+- **Löser.** Alle Prüfungen nach Satz 1 laufen über den exakten
+  Strahlen-Löser aus Abschnitt 11. Z3 wird nur noch für die Faktoren der
+  Lösungswege (3.2), für die kleinsten Beispielgewichte und als Referenz in
+  den Tests gebraucht.
 - **Keine vervielfachten Waagen.** Waagen wie $2c < 2a$ oder $3c = 3d$ werden
   nicht erzeugt (ggT der Koeffizienten größer als 1). Sie sind nur verkleidete
   einfachere Waagen. Mit `Settings(allow_multiples=True)` lassen sie sich
@@ -358,6 +369,189 @@ Spielmodus.
 
 Die Stufe ist exakt im Sinne der Definition. Die Reihenfolge der Schritte und
 damit der Lösungsweg ist eine Heuristik und nicht immer der kürzeste.
+
+## 9. Der Katalog aller Rätsel
+
+### 9.1 Anzahl
+
+Nach den Festlegungen aus Abschnitt 1 gibt es genau **147 462** verschiedene
+Rätsel. Ohne vervielfachte Waagen wie $2c < 2a$ sind es 115 775.
+
+| Stufe | 2 Waagen | 3 Waagen | zusammen | davon ohne Vielfache |
+|---|---:|---:|---:|---:|
+| 1 ablesen | 69 | 429 | 498 | 325 |
+| 2 Kette | 420 | 54 120 | 54 540 | 35 968 |
+| 3 kombinieren | 180 | 73 012 | 73 192 | 62 065 |
+| 4 auflösen | – | 19 232 | 19 232 | 17 417 |
+| **zusammen** | **669** | **146 793** | **147 462** | **115 775** |
+
+`python katalog.py` zählt alle auf und schreibt sie mit ihrer Stufe nach
+`data/katalog.json.gz`. Das dauert auf vier Kernen etwa drei Minuten; die Datei ist 450 KB groß.
+
+### 9.2 Aufzählung
+
+1. Von den 603 möglichen Waagen sind 481 damit verträglich, dass $a$ am
+   schwersten ist. Zwei davon, $b + c + d < a$ und $b + c + d = a$, bestimmen
+   den Schwersten schon allein; sie können in keinem Rätsel vorkommen, weil
+   jede weitere Waage überflüssig wäre.
+2. **Vorfilter mit Stichproben.** Für jede Waage wird als Bitmaske
+   gespeichert, welche der Gewichte $(w_a, w_b, w_c, w_d) \in \{1,\dots,9\}^4$
+   sie erfüllen, ergänzt um Gegenbeispiele, die unterwegs anfallen. Erfüllt
+   eine Stichprobe alle Waagen eines Systems, aber $a$ ist dort nicht echt am
+   schwersten, ist das System sicher kein Rätsel. Dieser Test kann nur
+   verwerfen, nie fälschlich annehmen.
+3. **Exakt.** Was den Vorfilter übersteht, prüft der Strahlen-Löser
+   (Abschnitt 11) nach Satz 1. Für Tripel
+   werden nur Systeme betrachtet, in denen kein Paar den Schwersten schon
+   bestimmt (Minimalität).
+4. **Gleichheit.** Jedes Rätsel wird nach Abschnitt 4.1 kanonisch geschrieben,
+   Doppelte fallen weg.
+5. **Stufe.** Für jedes Rätsel wird die Stufe aus Abschnitt 8 berechnet.
+
+Gegenproben in den Tests: Stichproben aus dem Katalog bestehen alle Prüfungen
+aus den Abschnitten 3, 4 und 8, und jedes Rätsel aus beiden Generatoren steht
+mit derselben Stufe im Katalog.
+
+### 9.3 Nutzung
+
+`CatalogSource` filtert den Katalog nach den Einstellungen einer Spielstufe
+und zieht ohne Wiederholung. Weil jedes Rätsel gleich wahrscheinlich ist,
+spiegelt das Spiel genau die Verteilung aller Rätsel wider. Beispielgewichte
+werden als kleinste ganzzahlige Lösung berechnet.
+
+## 10. Der Baukasten
+
+### 10.1 Bausteinregel
+
+Statt Waagen blind zu ziehen, kann man ein Rätsel nach einem Lösungsplan
+bauen. Grundlage ist eine Regel, die nachbildet, wie ein Mensch aus einer
+Waage und schon bekannten Vergleichen schließt:
+
+> Links stehen $n$ Gegenstände, die alle mindestens so schwer sind wie $x$
+> (alles andere links fällt weg). Rechts stehen $m$ Einheiten, die alle
+> höchstens so schwer sind wie $h$. Ist $n \ge m$, dann gilt $x < h$.
+
+Denn $n \cdot x \le$ (linke Seite) $<$ (rechte Seite) $\le m \cdot h \le n \cdot h$.
+Bei einem Gleichgewicht braucht man zusätzlich etwas Echtes: einen
+weggelassenen Gegenstand, $n > m$ oder einen echten Vergleich.
+
+Eine **Einheit** ist ein einzelner Gegenstand oder ein **Block**: eine Summe
+wie $c + d$, für die eine Waage $c + d < a$ oder $c + d = a$ zeigt.
+
+| Stufe | Bausteinregel mit ... | Beispiel |
+|---|---|---|
+| 1 | nur der Waage selbst, rechts nur $a$ | $b + c < a$, $d < a$ |
+| 2 | bekannten Vergleichen | $b + c < a$, $2d < a + c$ |
+| 3 | bekannten Vergleichen und Blöcken | $c + d < a$, $2b < a + c + d$ |
+
+Im dritten Beispiel helfen die Einzelvergleiche $c < a$ und $d < a$ nicht,
+denn daraus folgt nur $2b < 3a$. Erst der Block $c + d$ als Ganzes gibt
+$2b < (c + d) + a < 2a$.
+
+Stufe 4 lässt sich so nicht gezielt bauen: Dort folgt aus keiner Waage und
+keinem Paar von Waagen ein einfacher Vergleich. Solche Rätsel kommen aus dem
+Katalog.
+
+### 10.2 Konstruktion
+
+1. Ziehe Gewichte mit $a$ als echtem Maximum und eine Zielstufe.
+2. Wähle nacheinander wahre Waagen, die nach der Bausteinregel der Zielstufe
+   etwas Neues zeigen. Bevorzugt werden Waagen, die einen Vergleich mit $a$
+   liefern oder die die nächstleichtere Regel nicht schafft.
+3. Sobald $b, c, d < a$ feststehen, ist der Plan fertig. Ist das Rätsel schon
+   mit der leichteren Regel lösbar, wird es verworfen.
+4. Danach exakt prüfen: $a$ eindeutig am schwersten (Satz 1), keine Waage
+   überflüssig (4.2), Stufe stimmt (Abschnitt 8), noch nicht vorgekommen
+   (4.1).
+
+Die Bausteinregel ist korrekt, aber nicht vollständig: Was sie folgert, gilt
+immer (das prüfen die Tests gegen Satz 1), aber nicht alles, was gilt, findet
+sie. Deshalb entscheidet am Ende immer die exakte Prüfung.
+
+Gemessen gegen den Zufallsgenerator, bei acht Rätseln je Einstellung (mit dem
+Strahlen-Löser aus Abschnitt 11):
+
+| Einstellung | Zufall | Baukasten |
+|---|---|---|
+| nur Stufe 1 | 8 in 16 s (6402 Versuche) | 8 in 0,6 s (25 Versuche) |
+| nur Stufe 2 | 8 in 2,5 s (1122 Versuche) | 8 in 1,2 s (49 Versuche) |
+| `mittel` | 8 in 0,5 s (495 Versuche) | 8 in 0,7 s (33 Versuche) |
+| `schwer` | 8 in 1,1 s (468 Versuche) | 8 in 3,9 s (161 Versuche) |
+
+Der Baukasten lohnt sich also, wenn eine seltene Stufe verlangt ist, vor allem
+Stufe 1. Seit der Strahlen-Löser die exakte Prüfung billig gemacht hat, ist
+sonst der Zufall schneller: Er probiert viel mehr, aber jeder Versuch kostet
+fast nichts, während der Baukasten seine Bausteinregel in Python auswertet.
+
+## 11. Der Strahlen-Löser
+
+### 11.1 Idee
+
+Die Lösungen eines Systems bilden die Menge
+
+$$
+C = \{ w : w_v > 0,\ z \cdot w < 0 	ext{ (geneigte Waagen)},\ y \cdot w = 0 	ext{ (Gleichgewichte)} \}.
+$$
+
+Ersetzt man jedes $<$ durch $\le$, erhält man einen spitzen Kegel $K$ im
+$\mathbb R^4$. Er wird von wenigen **Kantenstrahlen** $r_1, \dots, r_k$
+aufgespannt, bei den Rätseln hier meist vier bis acht.
+
+**Satz 4.** Ist $C$ nicht leer, dann ist $C$ das relative Innere von $K$,
+also genau die Menge der Summen $\sum \lambda_i r_i$ mit allen
+$\lambda_i > 0$. Daraus folgt:
+
+1. $C$ ist genau dann nicht leer, wenn jede echte Ungleichung (jede geneigte
+   Waage und jedes $w_v > 0$) auf mindestens einem Strahl echt erfüllt ist.
+2. Aus dem System folgt $x < h$ genau dann, wenn auf allen Strahlen
+   $r_x \le r_h$ gilt und auf mindestens einem $r_x < r_h$.
+
+*Beweis.* Eine lineare Funktion $f$ ist auf allen Summen
+$\sum \lambda_i r_i$ mit $\lambda_i > 0$ genau dann negativ, wenn
+$f(r_i) \le 0$ für alle $i$ und $f(r_i) < 0$ für ein $i$. Für (1) ist
+die Summe aller Strahlen dann ein Punkt, der alle echten Ungleichungen echt
+erfüllt; umgekehrt liegt jeder Punkt von $C$ in $K$. Für (2) wende man das
+auf $f = w_x - w_h$ an. $\square$
+
+Jede Frage nach Satz 1 wird damit zu einer Vorzeichenprüfung an wenigen
+ganzzahligen Vektoren. Die Summe aller Strahlen ist zugleich eine
+ganzzahlige Lösung.
+
+### 11.2 Berechnung der Strahlen
+
+Double-Description-Methode, ganz in ganzen Zahlen:
+
+1. Beginne mit dem Kegel $w \ge 0$, Strahlen $e_a, e_b, e_c, e_d$.
+2. Schneide nacheinander mit jeder Bedingung $z \cdot w \le 0$ (bzw. $= 0$):
+   Strahlen mit $z \cdot r \le 0$ (bzw. $= 0$) bleiben. Für jedes Paar aus
+   einem Strahl $p$ mit $z \cdot p > 0$ und einem Strahl $n$ mit
+   $z \cdot n < 0$ entsteht der Kandidat
+   $(z \cdot p)\, n - (z \cdot n)\, p$, der auf der Ebene $z \cdot w = 0$
+   liegt.
+3. Ein Kandidat ist genau dann ein Kantenstrahl, wenn die an ihm scharfen
+   Bedingungen den Rang 3 haben. Nur solche werden behalten.
+
+Die Kegel werden zwischengespeichert. Wer Bedingungen nacheinander anhängt,
+wie die Stufenberechnung mit neu gefolgerten Vergleichen, bekommt jeden Kegel
+aus dem vorigen und rechnet nur den letzten Schnitt neu.
+
+### 11.3 Messung
+
+Gemessen an zufälligen Rätseln aus dem Katalog:
+
+| Aufgabe | vorher | Strahlen-Löser | Faktor |
+|---|---:|---:|---:|
+| alle 12 Fragen „folgt $x < h$?“ | 67 ms (Stichproben + Z3) | 0,56 ms | 120 |
+| dasselbe nur mit Z3 | 61 ms | 0,56 ms | 108 |
+| Stufe berechnen (Abschnitt 8) | 17 ms (Stichproben + Z3) | 2,8 ms | 6 |
+| Schwerster und Minimalität | – | 0,4 ms | – |
+
+Der ganze Katalog (Abschnitt 9) entsteht damit in gut 3 statt 46 Minuten, mit genau demselben Inhalt.
+
+Gegenproben in den Tests: Auf zufälligen Systemen aus allen 603 Waagen, auch
+mit zusätzlichen bekannten Vergleichen, stimmen Lösbarkeit und alle
+Folgerungen mit Z3 überein. Bei der Entwicklung waren es über 14 000
+Systeme und 38 000 erzwungene Vergleiche ohne eine Abweichung.
 
 ## Anhang: Prüfskript
 

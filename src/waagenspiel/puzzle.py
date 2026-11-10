@@ -20,9 +20,11 @@ from functools import lru_cache
 from fractions import Fraction
 from itertools import combinations, permutations, product
 from math import gcd, lcm
-from typing import Iterable, Iterator, Literal, Mapping, Sequence
+from typing import Callable, Iterable, Iterator, Literal, Mapping, Sequence
 
 import z3
+
+from .cone import constraints_of, cone_of
 
 NAMES: tuple[str, ...] = ("a", "b", "c", "d")
 MAX_SIDE = 3
@@ -30,6 +32,8 @@ MAX_SIDE = 3
 Side = tuple[int, int, int, int]
 Operator = Literal["<", "="]
 Permutation = tuple[int, int, int, int]
+# Entscheidet exakt, ob aus den Waagen ``x < h`` folgt.
+Entails = Callable[[Sequence["Scale"], int, int], bool]
 
 # Umbenennungen, die a festhalten: a ist nach der Kanonisierung immer der Schwerste.
 LOWER_PERMUTATIONS: tuple[Permutation, ...] = tuple(
@@ -98,6 +102,9 @@ class Scale:
             left, right = right, left
         object.__setattr__(self, "left", left)
         object.__setattr__(self, "right", right)
+        # Vorberechnet, weil der Loeser ihn sehr oft braucht (kein Feld:
+        # Gleichheit und Sortierung bleiben bei left, operator, right).
+        object.__setattr__(self, "_vector", tuple(l - r for l, r in zip(left, right)))
 
     @classmethod
     def parse(cls, text: str) -> "Scale":
@@ -126,7 +133,7 @@ class Scale:
     def vector(self) -> tuple[int, int, int, int]:
         """z = L - R; die Waage sagt z·w < 0 bzw. z·w = 0."""
 
-        return tuple(l - r for l, r in zip(self.left, self.right))  # type: ignore[return-value]
+        return self._vector  # type: ignore[attr-defined]
 
     def renamed(self, permutation: Permutation) -> "Scale":
         """Benennt Gegenstand i in Gegenstand ``permutation[i]`` um."""
@@ -176,8 +183,22 @@ def _solver(scales: Iterable[Scale], extra: Iterable[z3.BoolRef] = ()) -> z3.Sol
     return solver
 
 
-def satisfiable(scales: Iterable[Scale]) -> bool:
+def satisfiable_z3(scales: Iterable[Scale]) -> bool:
+    """Referenz mit Z3 (langsam); siehe :func:`satisfiable`."""
+
     return _solver(scales).check() == z3.sat
+
+
+def forces_lighter_z3(scales: Iterable[Scale], lighter: int, heavier: int) -> bool:
+    """Referenz mit Z3 (langsam); siehe :func:`forces_lighter`."""
+
+    return _solver(scales, [_W[lighter] >= _W[heavier]]).check() == z3.unsat
+
+
+def satisfiable(scales: Iterable[Scale]) -> bool:
+    """Gibt es positive Gewichte, die alle Waagen erfuellen? (Strahlen-Loeser)"""
+
+    return cone_of(constraints_of(scales)).satisfiable()
 
 
 def forces_lighter(scales: Iterable[Scale], lighter: int, heavier: int) -> bool:
@@ -185,52 +206,27 @@ def forces_lighter(scales: Iterable[Scale], lighter: int, heavier: int) -> bool:
 
     Gibt es keine Loesung mit w_lighter >= w_heavier, folgt die Aussage
     (Satz 1). Ein unerfuellbares System liefert ebenfalls ``True``; deshalb
-    prueft :func:`heaviest` die Erfuellbarkeit vorher.
+    prueft :func:`heaviest` die Erfuellbarkeit vorher. Exakt ueber die
+    Kantenstrahlen des Loesungskegels (Abschnitt 11).
     """
 
-    scales = list(scales)
-    for weights in _SAMPLES:  # schneller Gegenbeispiel-Test vor Z3
-        if weights[lighter] >= weights[heavier] and all(s.holds(weights) for s in scales):
-            return False
-    return _solver(scales, [_W[lighter] >= _W[heavier]]).check() == z3.unsat
+    return cone_of(constraints_of(scales)).forces_lighter(lighter, heavier)
 
 
 def heaviest(scales: Sequence[Scale]) -> int | None:
     """Index des eindeutig schwersten Gegenstands oder ``None``."""
 
-    solver = _solver(scales)
-    if solver.check() != z3.sat:
+    cone = cone_of(constraints_of(scales))
+    if not cone.satisfiable():
         return None
-    model = solver.model()
-    values = [model.eval(w, model_completion=True).as_fraction() for w in _W]
-    top = max(values)
-    if values.count(top) > 1:
-        return None  # dieses Modell ist selbst ein Gegenbeispiel
-    candidate = values.index(top)
-    return candidate if forces_heaviest(scales, candidate) else None
-
-
-def _sample_weights(count: int = 600, seed: int = 20261110) -> list[tuple[int, ...]]:
-    rng = random.Random(seed)
-    samples = [tuple(rng.randint(1, 12) for _ in range(4)) for _ in range(count // 2)]
-    samples += [tuple(rng.randint(1, 60) for _ in range(4)) for _ in range(count - len(samples))]
-    return samples
-
-
-_SAMPLES = _sample_weights()
-
-
-def refuted_by_sample(scales: Sequence[Scale], top: int) -> bool:
-    """Schneller, aber nur einseitiger Test: ``True`` heisst sicher, dass
-    ``top`` nicht eindeutig am schwersten ist (ein Gegenbeispiel wurde
-    gefunden). ``False`` beweist nichts."""
-
-    for weights in _SAMPLES:
-        if all(s.holds(weights) for s in scales) and any(
-            weights[x] >= weights[top] for x in range(4) if x != top
-        ):
-            return True
-    return False
+    point = cone.interior_point()  # selbst eine Loesung
+    top = max(point)
+    if point.count(top) > 1:
+        return None  # diese Loesung ist selbst ein Gegenbeispiel
+    candidate = point.index(top)
+    if all(cone.forces_lighter(x, candidate) for x in range(4) if x != candidate):
+        return candidate
+    return None
 
 
 def forces_heaviest(scales: Sequence[Scale], top: int) -> bool:
@@ -238,9 +234,17 @@ def forces_heaviest(scales: Sequence[Scale], top: int) -> bool:
 
     Setzt voraus, dass die Waagen erfuellbar sind."""
 
-    if refuted_by_sample(scales, top):
-        return False
-    return all(forces_lighter(scales, x, top) for x in range(4) if x != top)
+    cone = cone_of(constraints_of(scales))
+    return all(cone.forces_lighter(x, top) for x in range(4) if x != top)
+
+
+def example_solution(scales: Sequence[Scale]) -> tuple[int, ...]:
+    """Irgendeine ganzzahlige Loesung (nicht unbedingt die kleinste)."""
+
+    cone = cone_of(constraints_of(scales))
+    if not cone.satisfiable():
+        raise ValueError("Die Waagen sind nicht erfuellbar")
+    return cone.interior_point()
 
 
 def is_minimal(scales: Sequence[Scale], top: int | None = None) -> bool:
@@ -486,6 +490,7 @@ LEVEL_NAMES = {1: "ablesen", 2: "Kette", 3: "kombinieren", 4: "aufloesen"}
 KNOWN = "bekannt"
 
 
+@lru_cache(maxsize=None)
 def _fact(lighter: int, heavier: int) -> Scale:
     """Ein bekannter Vergleich ``lighter < heavier`` als Waage."""
 
@@ -565,6 +570,7 @@ def _closure(
     candidates: Sequence[tuple[int, int]],
     max_size: int,
     known: dict[tuple[int, int], tuple[int, ...]],
+    entails: Entails = forces_lighter,
 ) -> None:
     """Leitet Vergleiche ab, solange es geht. Jeder Schritt darf hoechstens
     ``max_size`` Waagen und alle schon bekannten Vergleiche benutzen.
@@ -587,7 +593,7 @@ def _closure(
                 if not base:
                     continue
                 for pair in candidates:
-                    if pair not in known and forces_lighter(base, *pair):
+                    if pair not in known and entails(base, *pair):
                         known[pair] = subset
                         changed = True
                         break
@@ -595,6 +601,45 @@ def _closure(
                     break
             if changed:
                 break  # wieder mit dem kleinsten Schritt anfangen
+
+
+def _levels(
+    scales: Sequence[Scale],
+    top: int,
+    candidates: Sequence[tuple[int, int]],
+    entails: Entails,
+) -> tuple[int, dict[tuple[int, int], tuple[int, ...]]]:
+    """Stufe nach Abschnitt 8 und die dabei abgeleiteten Vergleiche."""
+
+    goals = [(x, top) for x in range(4) if x != top]
+    known: dict[tuple[int, int], tuple[int, ...]] = {}
+    _closure(scales, candidates, 1, known, entails)
+    level = 2 if all(goal in known for goal in goals) else 0
+    if level == 2 and all(any(entails([s], x, top) for s in scales) for x, _ in goals):
+        level = 1
+    if not level:
+        _closure(scales, candidates, 2, known, entails)
+        level = 3 if all(goal in known for goal in goals) else 4
+    return level, known
+
+
+ALL_PAIRS: tuple[tuple[int, int], ...] = tuple((u, v) for u in range(4) for v in range(4) if u != v)
+
+
+def level_of(scales: Sequence[Scale], top: int | None = None, entails: Entails | None = None) -> int:
+    """Nur die Stufe (1 bis 4), ohne Loesungstexte.
+
+    ``entails(waagen, x, h)`` muss exakt entscheiden, ob x < h folgt; ein
+    schnellerer Pruefer (z. B. mit vorberechneten Stichproben) kann
+    uebergeben werden. Ist ``top`` bekannt, entfaellt die Suche nach dem
+    Schwersten.
+    """
+
+    if top is None:
+        top = heaviest(scales)
+        if top is None:
+            raise ValueError("Der Schwerste ist nicht eindeutig")
+    return _levels(scales, top, ALL_PAIRS, entails or forces_lighter)[0]
 
 
 def solve(scales: Sequence[Scale]) -> Solution:
@@ -610,15 +655,7 @@ def solve(scales: Sequence[Scale]) -> Solution:
     # Nur Vergleiche, die in einer Loesung gelten, koennen erzwungen sein.
     candidates = [(u, v) for u in range(4) for v in range(4) if values[u] < values[v]]
     goals = [(x, top) for x in range(4) if x != top]
-
-    known: dict[tuple[int, int], tuple[int, ...]] = {}
-    _closure(scales, candidates, 1, known)
-    level = 2 if all(goal in known for goal in goals) else 0
-    if level == 2 and all(any(forces_lighter([s], x, top) for s in scales) for x, _ in goals):
-        level = 1
-    if not level:
-        _closure(scales, candidates, 2, known)
-        level = 3 if all(goal in known for goal in goals) else 4
+    level, known = _levels(scales, top, candidates, forces_lighter)
 
     order = list(known)
     built: dict[tuple[int, int], Step] = {}

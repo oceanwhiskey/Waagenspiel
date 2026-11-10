@@ -5,6 +5,11 @@ Beispiele:
     python raetsel.py erzeugen --anzahl 20 --stufe mittel --ausgabe data/raetsel.json
     python raetsel.py erzeugen --anzahl 5 --stufe experte --mit-loesung
     python raetsel.py spielen --stufe leicht
+    python raetsel.py spielen --stufe schwer --quelle baukasten
+
+Quellen: ``katalog`` zieht gleichverteilt aus allen Raetseln (data/katalog.json.gz,
+erzeugt mit katalog.py), ``baukasten`` baut Raetsel gezielt nach Loesungsplan
+(Stufen 1-3), ``zufall`` zieht Waagen blind und prueft.
 
 Grundlage ist docs/03_einfache_herleitung.md.
 """
@@ -22,6 +27,24 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from waagenspiel.puzzle import LEVELS, NAMES, Puzzle, PuzzleGenerator, Settings  # noqa: E402
+
+SOURCES = ("katalog", "baukasten", "zufall")
+
+
+def make_source(name: str, settings: Settings, seed: int | None):
+    """Raetselquelle mit ``generate(anzahl)`` und ``shuffled(raetsel)``."""
+
+    if name == "katalog":
+        from waagenspiel.catalog import DEFAULT_PATH, CatalogSource
+
+        if not DEFAULT_PATH.exists():
+            raise RuntimeError(f"{DEFAULT_PATH} fehlt; erst 'python katalog.py' ausfuehren")
+        return CatalogSource(settings, seed)
+    if name == "baukasten":
+        from waagenspiel.construct import ConstructiveGenerator
+
+        return ConstructiveGenerator(settings, seed)
+    return PuzzleGenerator(settings, seed)
 
 
 def settings_from(args: argparse.Namespace) -> Settings:
@@ -53,7 +76,7 @@ def print_puzzle(number: int, puzzle: Puzzle, *, solution: bool) -> None:
 
 def command_generate(args: argparse.Namespace) -> int:
     settings = settings_from(args)
-    generator = PuzzleGenerator(settings, seed=args.seed)
+    generator = make_source(args.quelle, settings, args.seed)
     puzzles = list(generator.generate(args.anzahl))
     if args.ausgabe:
         data = {
@@ -61,6 +84,7 @@ def command_generate(args: argparse.Namespace) -> int:
                 "schema_version": 1,
                 "source": "docs/03_einfache_herleitung.md",
                 "level": args.stufe,
+                "puzzle_source": args.quelle,
                 "settings": {
                     "scale_counts": list(settings.scale_counts),
                     "max_side": settings.max_side,
@@ -86,7 +110,7 @@ def command_generate(args: argparse.Namespace) -> int:
 
 
 def command_play(args: argparse.Namespace) -> int:
-    generator = PuzzleGenerator(settings_from(args), seed=args.seed)
+    generator = make_source(args.quelle, settings_from(args), args.seed)
     solved = played = 0
     print("Welcher Gegenstand ist am schwersten? Antworte mit a, b, c oder d.")
     print("h zeigt einen Hinweis, q beendet das Spiel.\n")
@@ -141,6 +165,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="mindestens diese Stufe (1 ablesen, 2 Kette, 3 kombinieren, 4 aufloesen)")
     common.add_argument("--max-schwierigkeit", type=int, choices=(1, 2, 3, 4), help="hoechstens diese Stufe")
     common.add_argument("--seed", type=int, help="Zufallsstartwert fuer reproduzierbare Raetsel")
+    common.add_argument("--quelle", choices=SOURCES, default="katalog",
+                        help="katalog (Standard), baukasten (Stufen 1-3) oder zufall")
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
