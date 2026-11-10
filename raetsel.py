@@ -1,0 +1,167 @@
+"""Waagenspiel-Raetsel erzeugen oder im Terminal spielen.
+
+Beispiele:
+
+    python raetsel.py erzeugen --anzahl 20 --stufe mittel --ausgabe data/raetsel.json
+    python raetsel.py erzeugen --anzahl 5 --stufe schwer --mit-loesung
+    python raetsel.py spielen --stufe leicht
+
+Grundlage ist docs/03_einfache_herleitung.md.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from dataclasses import replace
+from pathlib import Path
+
+SRC = Path(__file__).resolve().parent / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from waagenspiel.puzzle import LEVELS, NAMES, Puzzle, PuzzleGenerator, Settings  # noqa: E402
+
+
+def settings_from(args: argparse.Namespace) -> Settings:
+    settings = LEVELS[args.stufe]
+    changes = {}
+    if args.waagen:
+        changes["scale_counts"] = tuple(args.waagen)
+    if args.max_seite:
+        changes["max_side"] = args.max_seite
+    if args.min_schwierigkeit:
+        changes["min_difficulty"] = args.min_schwierigkeit
+    if args.max_schwierigkeit:
+        changes["max_difficulty"] = args.max_schwierigkeit
+    return replace(settings, **changes)
+
+
+def print_puzzle(number: int, puzzle: Puzzle, *, solution: bool) -> None:
+    print(f"Raetsel {number} (Schwierigkeit {puzzle.difficulty})")
+    for index, scale in enumerate(puzzle.scales, start=1):
+        print(f"  Waage {index}:  {scale}")
+    if solution:
+        print(f"  Am schwersten: {NAMES[puzzle.heaviest]}")
+        for derivation in puzzle.derivations:
+            print(f"  Warum {NAMES[derivation.lighter]} leichter ist:")
+            for step in derivation.steps():
+                print(f"    {step}")
+    print()
+
+
+def command_generate(args: argparse.Namespace) -> int:
+    settings = settings_from(args)
+    generator = PuzzleGenerator(settings, seed=args.seed)
+    puzzles = list(generator.generate(args.anzahl))
+    if args.ausgabe:
+        data = {
+            "metadata": {
+                "schema_version": 1,
+                "source": "docs/03_einfache_herleitung.md",
+                "level": args.stufe,
+                "settings": {
+                    "scale_counts": list(settings.scale_counts),
+                    "max_side": settings.max_side,
+                    "max_weight": settings.max_weight,
+                    "balance_share": settings.balance_share,
+                    "allow_multiples": settings.allow_multiples,
+                    "min_difficulty": settings.min_difficulty,
+                    "max_difficulty": settings.max_difficulty,
+                },
+                "seed": args.seed,
+                "count": len(puzzles),
+            },
+            "puzzles": [{"id": f"r{i:05d}", **p.to_json()} for i, p in enumerate(puzzles, start=1)],
+        }
+        path = Path(args.ausgabe)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"{len(puzzles)} Raetsel nach {path} geschrieben.")
+    else:
+        for number, puzzle in enumerate(puzzles, start=1):
+            print_puzzle(number, puzzle, solution=args.mit_loesung)
+    return 0
+
+
+def command_play(args: argparse.Namespace) -> int:
+    generator = PuzzleGenerator(settings_from(args), seed=args.seed)
+    solved = played = 0
+    print("Welcher Gegenstand ist am schwersten? Antworte mit a, b, c oder d.")
+    print("h zeigt einen Hinweis, q beendet das Spiel.\n")
+    while args.runden == 0 or played < args.runden:
+        puzzle = generator.shuffled(next(generator.generate(1)))
+        print_puzzle(played + 1, puzzle, solution=False)
+        hints = list(puzzle.derivations)
+        while True:
+            try:
+                answer = input("> ").strip().lower()
+            except EOFError:
+                answer = "q"
+            if answer == "q":
+                print(f"\n{solved} von {played} Raetseln richtig.")
+                return 0
+            if answer == "h":
+                if hints:
+                    derivation = hints.pop(0)
+                    print(f"Hinweis: {NAMES[derivation.lighter]} ist nicht der Schwerste.")
+                    for step in derivation.steps():
+                        print(f"  {step}")
+                else:
+                    print("Keine weiteren Hinweise.")
+                continue
+            if answer not in NAMES:
+                print("Bitte a, b, c, d, h oder q eingeben.")
+                continue
+            played += 1
+            if NAMES.index(answer) == puzzle.heaviest:
+                solved += 1
+                print("Richtig!\n")
+            else:
+                derivation = next(d for d in puzzle.derivations if NAMES[d.lighter] == answer)
+                print(f"Leider nein, {NAMES[puzzle.heaviest]} ist am schwersten. Warum {answer} leichter ist:")
+                for step in derivation.steps():
+                    print(f"  {step}")
+                print()
+            break
+    print(f"{solved} von {played} Raetseln richtig.")
+    return 0
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--stufe", choices=sorted(LEVELS), default="mittel",
+                        help="leicht: 1 Gegenstand pro Seite; mittel: bis 2; schwer: bis 3 und Waagen kombinieren")
+    common.add_argument("--waagen", type=int, nargs="+", choices=(2, 3), help="erlaubte Anzahl Waagen")
+    common.add_argument("--max-seite", type=int, choices=(1, 2, 3), help="Gegenstaende pro Seite hoechstens")
+    common.add_argument("--min-schwierigkeit", type=int, help="mindestens so viele addierte Waagen im Loesungsweg")
+    common.add_argument("--max-schwierigkeit", type=int, help="hoechstens so viele addierte Waagen im Loesungsweg")
+    common.add_argument("--seed", type=int, help="Zufallsstartwert fuer reproduzierbare Raetsel")
+
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    commands = parser.add_subparsers(dest="command", required=True)
+    generate = commands.add_parser("erzeugen", parents=[common], help="Raetsel erzeugen")
+    generate.add_argument("--anzahl", type=int, default=10)
+    generate.add_argument("--ausgabe", help="JSON-Datei; ohne Angabe Ausgabe als Text")
+    generate.add_argument("--mit-loesung", action="store_true", help="Loesungswege in der Textausgabe zeigen")
+    generate.set_defaults(run=command_generate)
+    play = commands.add_parser("spielen", parents=[common], help="im Terminal spielen")
+    play.add_argument("--runden", type=int, default=0, help="Anzahl Raetsel, 0 = bis q")
+    play.set_defaults(run=command_play)
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    args = parse_args(argv)
+    try:
+        return args.run(args)
+    except (ValueError, RuntimeError) as error:
+        print(f"Fehler: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
