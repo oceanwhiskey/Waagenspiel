@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#eaf6ff">
+  <meta name="description" content="Waagen-Spiel: Schau dir die Waagen an und finde die schwerste Figur.">
+  <title>Waagen-Spiel</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Waagen-Spiel">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <!-- Startbildschirm -->
+    <section id="start" class="screen">
+      <h1>Waagen-Spiel</h1>
+      <p class="sub">Schau dir die Waagen an und finde die schwerste Figur!</p>
+      <svg id="logo" viewBox="0 0 360 170" aria-hidden="true"></svg>
+      <h2>Schwierigkeit</h2>
+      <div id="wahl-stufe" class="chips" role="radiogroup" aria-label="Schwierigkeit"></div>
+      <h2>Zeit</h2>
+      <div id="wahl-zeit" class="chips" role="radiogroup" aria-label="Zeit"></div>
+      <p id="rekord" class="note"></p>
+      <button id="los" class="big good">Los geht's!</button>
+      <button id="ton" class="link" type="button"></button>
+      <p id="laden" class="note"></p>
+    </section>
+
+    <!-- Spiel -->
+    <section id="spiel" class="screen" hidden>
+      <header class="bar">
+        <button id="zurueck" class="icon-btn" aria-label="Zum Menü">✕</button>
+        <span id="stand"></span>
+        <span id="punkte" class="points"></span>
+        <span id="uhr" class="clock"></span>
+        <button id="tipp" class="small gold" hidden>Tipp</button>
+      </header>
+      <div id="zeitbalken" class="timebar"><div></div></div>
+      <div id="stufe" class="level"></div>
+      <svg id="feld" viewBox="0 0 360 476" preserveAspectRatio="xMidYMid meet" aria-label="Waagen"></svg>
+      <p id="nachricht" class="message" aria-live="polite"></p>
+      <div id="karten" class="cards"></div>
+    </section>
+
+    <!-- Erklaerung (Ueben) -->
+    <aside id="blatt" class="sheet" hidden>
+      <h3 id="blatt-titel"></h3>
+      <ul id="blatt-text"></ul>
+      <div class="sheet-buttons">
+        <button id="blatt-mehr" class="small gold">Nächster Tipp</button>
+        <button id="blatt-ok" class="small good">OK</button>
+      </div>
+    </aside>
+
+    <!-- Auswertung -->
+    <section id="ende" class="screen" hidden>
+      <h1 id="ende-titel"></h1>
+      <p id="ende-rekord" class="record"></p>
+      <table class="stats">
+        <tr><td>Gespielte Runden</td><td id="e-runden"></td></tr>
+        <tr><td>Richtig gelöst</td><td id="e-richtig" class="good-text"></td></tr>
+        <tr><td>Falsch</td><td id="e-falsch" class="bad-text"></td></tr>
+        <tr><td>Beste Serie</td><td id="e-serie"></td></tr>
+        <tr><td>Punkte</td><td id="e-punkte" class="points"></td></tr>
+      </table>
+      <div id="ende-figuren" class="row-figures"></div>
+      <div class="end-buttons">
+        <button id="nochmal" class="big good">Nochmal</button>
+        <button id="menue" class="big blue">Menü</button>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="oberflaeche.js"></script>
+</body>
+</html>

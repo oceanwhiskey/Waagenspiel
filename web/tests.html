@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Tests: Waagen-Spiel</title>
+  <style>
+    body { font: 15px system-ui, sans-serif; margin: 20px; }
+    .ok { color: #2a9d8f; } .fail { color: #e63946; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Tests der Spiellogik</h1>
+  <p id="summary">läuft …</p>
+  <ul id="out"></ul>
+  <script type="module">
+    import {
+      FixedDifficulty, GameSession, Highscores, RisingDifficulty, RoundSource, explain, makeRound,
+      panItems, panPositions, parseScale, pickCharacters, pointsFor, scaleView, seededRandom, stepsFor,
+    } from "./spiel.js";
+
+    const results = [];
+    const test = async (name, fn) => {
+      try { await fn(); results.push([name, null]); } catch (e) { results.push([name, e]); }
+    };
+    const eq = (a, b, msg = "") => {
+      if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg} ${JSON.stringify(a)} ≠ ${JSON.stringify(b)}`);
+    };
+    const ok = (cond, msg = "") => { if (!cond) throw new Error(msg || "Bedingung falsch"); };
+
+    // Exakte Pruefung im Browser: Gewichte sind ganze Zahlen 1..12; jede passende Belegung
+    // muss die Antwort als echt Schwerste haben (Stichprobe, nur als Gegenprobe).
+    const holds = (s, w) => {
+      const l = s.left.reduce((t, k, i) => t + k * w[i], 0);
+      const r = s.right.reduce((t, k, i) => t + k * w[i], 0);
+      return s.op === "<" ? l < r : l === r;
+    };
+
+    const data = await (await fetch("raetsel.json")).json();
+    const clock = () => clock.now;
+    clock.now = 100;
+    const fixedSource = {
+      levels: [],
+      next(level) {
+        this.levels.push(level);
+        return makeRound({ s: ["b < a", "c < a", "d < a"], steps: [] }, level, seededRandom(1), false);
+      },
+    };
+
+    await test("Figuren unterscheiden sich in Farbe und Form", () => {
+      for (let seed = 0; seed < 20; seed++) {
+        const ch = pickCharacters(seededRandom(seed));
+        eq(new Set(ch.map((c) => c.color)).size, 4);
+        eq(new Set(ch.map((c) => c.shape)).size, 4);
+      }
+    });
+
+    await test("Waagen werden richtig gelesen", () => {
+      eq(parseScale("b + 2c < a"), { left: [0, 1, 2, 0], op: "<", right: [1, 0, 0, 0] });
+      eq(parseScale("3d = a + b").op, "=");
+    });
+
+    await test("Gleiche Figuren liegen nebeneinander unten, hoechstens zwei nebeneinander", () => {
+      eq(panItems([1, 0, 0, 2]), [3, 3, 0]);
+      eq(panItems([2, 1, 0, 0]), [0, 0, 1]);
+      eq(panPositions(3)[2], [0, 1]);
+    });
+
+    await test("Die schwerere Schale haengt unten", () => {
+      const s = parseScale("b + c < a");
+      eq(scaleView(s, 1, false), { number: 1, left: [1, 2], right: [0], tilt: 1 });
+      eq(scaleView(s, 1, true).tilt, -1);
+      eq(scaleView(parseScale("a = b + c"), 1, true).tilt, 0);
+    });
+
+    await test("Jedes exportierte Raetsel hat nach dem Umbenennen eine echt Schwerste (Stichprobe)", () => {
+      const random = seededRandom(7);
+      let checked = 0;
+      for (const [level, puzzles] of Object.entries(data.levels)) {
+        for (const puzzle of puzzles.slice(0, 60)) {
+          const round = makeRound(puzzle, Number(level), random);
+          for (let i = 0; i < 3000; i++) {
+            const w = [0, 1, 2, 3].map(() => 1 + Math.floor(random() * 12));
+            if (round.scales.every((s) => holds(s, w))) {
+              ok(w.every((v, k) => k === round.answer || v < w[round.answer]), `Gegenbeispiel ${puzzle.s}`);
+              checked++;
+            }
+          }
+        }
+      }
+      ok(checked > 1000, `nur ${checked} passende Belegungen`);
+    });
+
+    await test("Alle vier Stufen sind vorhanden", () => {
+      eq(Object.keys(data.levels).sort(), ["1", "2", "3", "4"]);
+      ok(Object.values(data.levels).every((p) => p.length >= 300));
+    });
+
+    await test("Erklaerung zeigt, warum die Wahl leichter ist, mit Namen und neuen Nummern", () => {
+      const puzzle = data.levels["4"][0];
+      const ch = pickCharacters(seededRandom(3));
+      const round = makeRound(puzzle, 4, seededRandom(5));
+      const wrong = [0, 1, 2, 3].find((i) => i !== round.answer);
+      const steps = stepsFor(round, wrong);
+      ok(steps.length > 0, "keine Schritte");
+      const last = steps.at(-1);
+      eq(last.fact, [wrong, round.answer]);
+      const text = last.text.map((line) => explain(line, round, ch)).join(" ");
+      ok(text.includes(ch[wrong].name) && text.includes(ch[round.answer].name), text);
+      ok(!/\b\d*[abcd]\b/.test(text), text);
+    });
+
+    await test("Waagennummern folgen dem Mischen", () => {
+      const round = makeRound({ s: ["b < a", "c < a", "d < a"], steps: [] }, 1, seededRandom(2));
+      const ch = pickCharacters(seededRandom(1));
+      eq(explain("Waage 1: b < a", round, ch).startsWith(`Waage ${round.order.indexOf(0) + 1}:`), true);
+    });
+
+    await test("Quelle mischt neu, wenn alle Raetsel einer Stufe gespielt sind", () => {
+      const source = new RoundSource({ 1: [{ s: ["b < a", "c < a", "d < a"], steps: [] }] }, seededRandom(1));
+      for (let i = 0; i < 3; i++) eq(source.next(1).level, 1);
+    });
+
+    await test("Richtige in Folge geben mehr Punkte", () => {
+      const s = new GameSession({ source: fixedSource, difficulty: new FixedDifficulty(2), clock, characters: [] });
+      const r = s.start();
+      eq(s.answer(r.answer).points, pointsFor(2, 1));
+      eq(s.answer(s.nextRound().answer).points, 22);
+      eq(s.result().bestStreak, 2);
+    });
+
+    await test("Falsche Antwort nennt die richtige und bricht die Serie", () => {
+      const s = new GameSession({ source: fixedSource, difficulty: new FixedDifficulty(1), clock, characters: [] });
+      const r = s.start();
+      const f = s.answer((r.answer + 1) % 4);
+      eq([f.correct, f.answer, f.streak], [false, r.answer, 0]);
+      eq(s.result(), { rounds: 1, correct: 0, wrong: 1, points: 0, bestStreak: 0 });
+    });
+
+    await test("Partie endet nach der Zeit; Ueben endet nie", () => {
+      clock.now = 100;
+      const s = new GameSession({ source: fixedSource, difficulty: new FixedDifficulty(1), timeLimit: 30, clock, characters: [] });
+      s.start();
+      clock.now = 129.5;
+      ok(!s.isOver());
+      clock.now = 131;
+      ok(s.isOver() && s.timeLeft() === 0);
+      const p = new GameSession({ source: fixedSource, difficulty: new FixedDifficulty(1), timeLimit: null, clock, characters: [] });
+      p.start();
+      clock.now = 99999;
+      ok(p.isPractice && !p.isOver() && p.timeLeft() === null);
+    });
+
+    await test("Steigend: drei Richtige heben, ein Fehler senkt, oben ist Schluss", () => {
+      const d = new RisingDifficulty();
+      [true, true, true].forEach((c) => d.record(c));
+      eq(d.level, 2);
+      d.record(false);
+      eq(d.level, 1);
+      for (let i = 0; i < 20; i++) d.record(true);
+      eq(d.level, 4);
+    });
+
+    await test("Bestenliste behaelt das Beste und ueberlebt einen Neustart", () => {
+      const store = new Map();
+      const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+      const h = new Highscores(storage);
+      const key = Highscores.key("Mittel", 60);
+      ok(h.submit(key, 50));
+      ok(!h.submit(key, 40));
+      eq(new Highscores(storage).get(key), 50);
+      store.set("waagenspiel.bestenliste", "kaputt");
+      eq(new Highscores(storage).get(key), 0);
+    });
+
+    const out = document.getElementById("out");
+    for (const [name, error] of results) {
+      const li = document.createElement("li");
+      li.className = error ? "fail" : "ok";
+      li.textContent = error ? `✘ ${name}: ${error.message}` : `✔ ${name}`;
+      out.appendChild(li);
+    }
+    const failed = results.filter(([, e]) => e).length;
+    document.getElementById("summary").textContent = `${results.length - failed} von ${results.length} bestanden`;
+    document.title = failed ? "FEHLER" : "OK";
+  </script>
+</body>
+</html>

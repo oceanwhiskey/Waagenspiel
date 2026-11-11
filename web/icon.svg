@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#bfe6ff"/>
+      <stop offset="1" stop-color="#ffe9c2"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g stroke="#9c6b00" stroke-width="8" stroke-linejoin="round">
+    <polygon points="176,420 336,420 300,392 212,392" fill="#e0a526"/>
+    <rect x="242" y="150" width="28" height="248" fill="#e0a526"/>
+    <line x1="96" y1="184" x2="416" y2="128" stroke="#e0a526" stroke-width="22" stroke-linecap="round"/>
+    <line x1="96" y1="184" x2="56" y2="330" stroke-width="5"/>
+    <line x1="96" y1="184" x2="136" y2="330" stroke-width="5"/>
+    <line x1="416" y1="128" x2="376" y2="274" stroke-width="5"/>
+    <line x1="416" y1="128" x2="456" y2="274" stroke-width="5"/>
+    <circle cx="96" cy="282" r="44" fill="#3a86ff"/>
+    <rect x="378" y="186" width="76" height="76" rx="26" fill="#ef476f"/>
+    <path d="M40,330 H152 L140,352 H52 Z" fill="#e0a526"/>
+    <path d="M360,274 H472 L460,296 H372 Z" fill="#e0a526"/>
+    <circle cx="256" cy="156" r="18" fill="#e0a526"/>
+  </g>
+  <g fill="white" stroke="#1f3b73" stroke-width="3">
+    <circle cx="80" cy="274" r="11"/><circle cx="112" cy="274" r="11"/>
+  </g>
+  <g fill="white" stroke="#7a1f33" stroke-width="3">
+    <circle cx="402" cy="218" r="10"/><circle cx="430" cy="218" r="10"/>
+  </g>
+  <g fill="#2b2d42">
+    <circle cx="80" cy="277" r="5.5"/><circle cx="112" cy="277" r="5.5"/>
+    <circle cx="402" cy="221" r="5"/><circle cx="430" cy="221" r="5"/>
+  </g>
+  <path d="M84,296 Q96,306 108,296" fill="none" stroke="#2b2d42" stroke-width="4" stroke-linecap="round"/>
+  <path d="M406,240 Q416,248 426,240" fill="none" stroke="#2b2d42" stroke-width="4" stroke-linecap="round"/>
+</svg>

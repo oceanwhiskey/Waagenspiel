@@ -590,6 +590,11 @@ manche gespiegelt.
 | Start | `spiel.py` |
 | Tests der Spiellogik | `tests/test_game.py` |
 
+Die Web-Version für Handy und Browser liegt in `web/`. Sie hat dieselben Modi
+und eine eigene Spiellogik in JavaScript. Ihre Rätsel samt Lösungsschritten
+exportiert `python webversion.py` aus dem Katalog. Zum Hochladen siehe
+`web/LIESMICH.md`.
+
 ### 12.1 Was am alten Spiel (`game_of_scales/`, inzwischen gelöscht) falsch war
 
 Alle 3 756 gespeicherten Rätsel wurden mit dem Strahlen-Löser nachgerechnet.

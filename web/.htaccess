@@ -1,0 +1,13 @@
+# Fuer Apache-Webspace (bei den meisten Hostern Standard).
+AddType application/manifest+json .webmanifest
+AddType application/javascript .js
+AddType application/json .json
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml application/manifest+json
+</IfModule>
+
+# Testseite nicht oeffentlich anbieten
+<Files "tests.html">
+  Require all denied
+</Files>
