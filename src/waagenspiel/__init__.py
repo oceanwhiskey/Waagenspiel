@@ -1,15 +1,5 @@
-"""Werkzeuge zur vollstaendigen Untersuchung des Waagenspiels."""
+"""Waagenspiel: exakte Raetsel, Loesungswege und ein Spiel (docs/03_einfache_herleitung.md)."""
 
-from .model import NAMES, Relation, System, generate_relations
-from .solver import WeightSolver
-from .semantic import SemanticCanonicalizer, TheoryCanonicalizer
+from .puzzle import NAMES, Puzzle, PuzzleGenerator, Scale, Settings, heaviest, solve
 
-__all__ = [
-    "NAMES",
-    "Relation",
-    "SemanticCanonicalizer",
-    "System",
-    "TheoryCanonicalizer",
-    "WeightSolver",
-    "generate_relations",
-]
+__all__ = ["NAMES", "Puzzle", "PuzzleGenerator", "Scale", "Settings", "heaviest", "solve"]

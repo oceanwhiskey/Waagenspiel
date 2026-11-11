@@ -1,8 +1,7 @@
 # Vereinfachte Herleitung
 
-Dieses Dokument ist eine schlanke Alternative zu `01_formalisierung.md` und
-`02_algorithmus.md`. Die dortigen Aussagen sind korrekt, beantworten aber eine
-schwerere Frage, als das Waagenspiel stellt. Hier wird gezeigt, dass der Kern
+Ein erster Versuch (inzwischen gelöscht) hatte eine schwerere Frage
+beantwortet, als das Waagenspiel stellt. Hier wird gezeigt, dass der Kern
 des Problems mit wenig Mathematik auskommt: lineare Ungleichungen in vier
 Variablen, ein kleines lineares Programm und das Farkas-Lemma.
 
@@ -225,11 +224,12 @@ $b, c, d$ bilden eine Halbordnung, und benennt man eine lineare Erweiterung
 von groß nach klein mit $c, b, d$, folgt keiner der drei verbotenen
 Vergleiche.
 
-## 5. Abgleich mit `data/systems-pairs.json`
+## 5. Abgleich mit dem ersten Versuch
 
-Ein Prüfskript nach Abschnitt 3.1 (siehe Anhang) bestätigt für alle 503
-Zweiersysteme im JSON, dass $a$ eindeutig am schwersten ist. In **96** davon
-reicht aber eine Waage allein, sie sind also nicht zielminimal. Beispiele:
+Der erste, inzwischen gelöschte Versuch hatte 503 Zweiersysteme erzeugt. Ein
+Prüfskript nach Abschnitt 3.1 (siehe Anhang) bestätigte für alle, dass $a$
+eindeutig am schwersten ist. In **96** davon reichte aber eine Waage allein,
+sie waren also nicht zielminimal. Beispiele:
 
 ```text
 3d < 2a + c   ;  b + c + d < a
@@ -553,6 +553,67 @@ mit zusätzlichen bekannten Vergleichen, stimmen Lösbarkeit und alle
 Folgerungen mit Z3 überein. Bei der Entwicklung waren es über 14 000
 Systeme und 38 000 erzwungene Vergleiche ohne eine Abweichung.
 
+## 12. Das Spiel mit Fenster
+
+```bash
+python spiel.py                 # Menü; Schwierigkeit und Zeit dort wählbar
+python spiel.py --zeit 45       # eigene Spielzeit in Sekunden
+python spiel.py --zeit 0        # Üben ohne Uhr
+python spiel.py --stufe Profi
+```
+
+Vier Figuren unterscheiden sich in Farbe *und* Form; sie wechseln von Partie zu
+Partie. Die Waagen stehen oben links, Mitte rechts und unten links, die
+schwerere Schale hängt unten. Auf einer Schale liegen höchstens zwei Figuren
+nebeneinander, eine dritte mittig obendrauf, gleiche nebeneinander.
+
+- **Auf Zeit**: so viele Rätsel wie möglich in $t$ Sekunden. Bei einer falschen
+  Antwort leuchtet die richtige Figur eine Sekunde lang auf, auch auf den Waagen.
+  Am Ende stehen gespielte Runden, richtige, falsche und die Punkte da. Je
+  Schwierigkeit und Zeit wird ein Rekord gespeichert (`~/.waagenspiel/bestenliste.json`).
+- **Üben**: ohne Uhr. Eine Leiste rechts zeigt auf Wunsch die Lösungsschritte
+  (Abschnitt 8). Nach einer falschen Antwort erklärt sie, warum die gewählte
+  Figur leichter ist als die richtige. Das ist der Farkas-Beweis aus Abschnitt 3,
+  mit den Namen der Figuren.
+- **Schwierigkeit**: Leicht, Mittel, Schwer und Profi entsprechen den Stufen 1–4.
+  „Steigend“ beginnt bei 1. Drei Richtige in Folge heben die Stufe, ein Fehler
+  senkt sie.
+
+Alle Rätsel kommen aus dem Katalog (ohne Vielfache wie `2b < 2a`). Für jede
+Runde werden die Figuren zufällig umbenannt, die Waagen gemischt und
+manche gespiegelt.
+
+| Teil | Datei |
+|---|---|
+| Spiellogik ohne Oberfläche: Runden, Partie, Punkte, Stufen, Bestenliste | `src/waagenspiel/game.py` |
+| Oberfläche (tkinter); bekommt die Partie von außen | `src/waagenspiel/gui.py` |
+| Start | `spiel.py` |
+| Tests der Spiellogik | `tests/test_game.py` |
+
+### 12.1 Was am alten Spiel (`game_of_scales/`, inzwischen gelöscht) falsch war
+
+Alle 3 756 gespeicherten Rätsel wurden mit dem Strahlen-Löser nachgerechnet.
+**28 haben keinen eindeutig Schwersten**, zum Beispiel
+`2c < d`, `2d < a`, `b < 2a` mit der Antwort a. Mit
+$(a, b, c, d) = (10, 15, 1, 4)$ ist aber b am schwersten. Dazu kommen 983
+doppelte Rätsel und 377 mit einer Waage, die nach dem Kürzen nichts aussagt
+(etwa `b < c + d + b`).
+
+Die Fehler im Prüfcode:
+
+1. Geneigte Waagen wurden in Paare zerlegt: Aus `b < a + a` wurde `b < a`, aus
+   `a + b = c + d` wurden `a = c`, `a = d`, `b = c` und `b = d`. Das ist falsch,
+   sobald auf einer Seite mehrere Gegenstände liegen.
+2. Gekürzt wurde mit Mengen statt Anzahlen: Aus `a + a + b` gegen `a + c` wurde
+   `b` gegen `c` statt `a + b` gegen `c`.
+3. Rangplätze 0, 1, 2, … wurden als Gewichte eingesetzt. Ob eine Reihenfolge
+   möglich ist, hängt aber von den echten Gewichten ab, und 0 ist kein
+   erlaubtes Gewicht.
+4. Am Ende entschied eine Zufallsstichprobe. Sie kann Gegenbeispiele finden,
+   aber Eindeutigkeit nie beweisen. Umgekehrt verwirft sie richtige Rätsel mit
+   Gleichgewichten wie `2a = b + c`, weil Zufallsgewichte sie fast nie genau
+   treffen.
+
 ## Anhang: Prüfskript
 
 ```python
@@ -587,5 +648,5 @@ def goal_minimal(relations):
     )
 ```
 
-Die Relationen haben dasselbe Format wie in `data/systems-pairs.json`, also
+Die Relationen haben das JSON-Format
 `{"left": {"b": 1, "c": 1}, "operator": "<", "right": {"a": 1}}`.

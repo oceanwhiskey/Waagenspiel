@@ -250,16 +250,6 @@ def test_lower_permutations_fix_a() -> None:
     assert all(p[0] == 0 for p in LOWER_PERMUTATIONS)
 
 
-# --- Abgleich mit den alten Daten ---------------------------------------------
-
-
-def test_old_pairs_are_forced_but_96_have_a_superfluous_scale() -> None:
-    data = json.loads((ROOT / "data" / "systems-pairs.json").read_text(encoding="utf-8"))["systems"]
-    systems = [[Scale.from_mapping(r) for r in s["relations"]] for s in data]
-    assert all(heaviest(s) == 0 for s in systems)
-    assert sum(is_minimal(s) for s in systems) == 503 - 96
-
-
 # --- Generator ----------------------------------------------------------------
 
 
