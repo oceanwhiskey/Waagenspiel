@@ -1,4 +1,5 @@
-# Fuer Apache-Webspace (bei den meisten Hostern Standard).
+# Fuer Apache-Webspace (bei den meisten Hostern Standard). Zum Zusammenfuehren mit
+# einer vorhandenen .htaccess einfach diese Zeilen anhaengen.
 AddType application/manifest+json .webmanifest
 AddType application/javascript .js
 AddType application/json .json

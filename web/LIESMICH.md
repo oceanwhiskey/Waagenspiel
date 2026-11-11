@@ -37,7 +37,8 @@ Spiellogik laufen unter <http://localhost:8000/tests.html>.
 | `figuren.js` | SVG-Zeichnungen der Figuren und Waagen |
 | `oberflaeche.js` | Bildschirme, Eingaben, Animationen; bekommt die Partie von außen |
 | `raetsel.json` | 1 525 Rätsel mit Lösungsschritten, erzeugt mit `python webversion.py` |
-| `sw.js`, `manifest.webmanifest`, `icon*` | Installierbar und offline spielbar |
+| `spiel.css` | Aussehen |
+| `sw.js`, `manifest.webmanifest`, `icon*` | Installierbar und offline spielbar; der Service Worker speichert nur die Spieldateien |
 
 Die Rätsel stammen aus dem exakt geprüften Katalog: Jedes hat genau eine
 schwerste Figur, und jede Waage wird gebraucht. Im Browser läuft kein Löser,
