@@ -597,6 +597,16 @@ nebeneinander, eine dritte mittig obendrauf, gleiche nebeneinander.
   (Abschnitt 8). Nach einer falschen Antwort erklärt sie, warum die gewählte
   Figur leichter ist als die richtige. Das ist der Farkas-Beweis aus Abschnitt 3,
   mit den Namen der Figuren.
+- **Punkte** (nur auf Zeit): Ein Rätsel der Stufe $s$ ist $10s$ Punkte wert.
+  Richtig gibt den Wert mal Serienfaktor: $	imes 1$ beim ersten Treffer,
+  $+0{,}25$ je weiteren Treffer in Folge, höchstens $	imes 3$. Falsch kostet
+  Punkte: Wer sofort klickt, verliert den vollen Wert. Mit der Bedenkzeit $t$
+  (ab dem Einpendeln der Waagen) sinkt der Abzug gleichmäßig bis auf ein
+  Drittel, erreicht nach $5s$ Sekunden:
+  $$	ext{Abzug} = 10s\,igl(1 - 	frac23 \min(1, t/5s)igr).$$
+  Bei einem Drittel bringt blindes Raten unter vier Figuren im Schnitt nichts
+  mehr: $	frac14 \cdot 10s - 	frac34 \cdot 	frac{10s}{3} = 0$. Der
+  Punktestand darf negativ werden; beim Üben zählen keine Punkte.
 - **Schwierigkeit**: Leicht, Mittel, Schwer und Profi entsprechen den Stufen 1–4.
   „Steigend“ beginnt bei 1. Drei Richtige in Folge heben die Stufe, ein Fehler
   senkt sie.

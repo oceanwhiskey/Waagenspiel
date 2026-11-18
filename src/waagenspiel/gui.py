@@ -25,6 +25,7 @@ from .game import (
     Round,
     ScaleView,
     explain_with_names,
+    streak_factor,
     pan_positions,
     pick_characters,
 )
@@ -381,7 +382,7 @@ class GameWindow:
         assert s is not None
         c = self.canvas
         c.itemconfigure(self.status_text, text=f"Runde {s.rounds + 1}    ✔ {s.correct}    ✘ {s.wrong}")
-        c.itemconfigure(self.points_text, text=f"★ {s.points}")
+        c.itemconfigure(self.points_text, text="" if s.is_practice else f"★ {s.points}")
         streak = f"    Serie {s.streak}" if s.streak >= 2 else ""
         c.itemconfigure(self.level_text, text=f"Stufe: {LEVEL_TITLES[s.difficulty.level]}{streak}")
 
@@ -399,6 +400,9 @@ class GameWindow:
             self.later(150, self.show_end_screen)
             self.accepting = False
             return
+        if self.accepting:
+            c.itemconfigure(self.message, text=f"Welche Figur ist am schwersten?   (Fehler kostet −{s.current_penalty()})",
+                            fill=SOFT_INK)
         self.later(100, self._tick)
 
     def _show_round(self) -> None:
@@ -474,11 +478,13 @@ class GameWindow:
         text = "Richtig!" + (f"  +{feedback.points}" if feedback.points else "")
         if feedback.level_after > feedback.level_before:
             text += f"   Neue Stufe: {LEVEL_TITLES[feedback.level_after]}!"
-        elif feedback.streak >= 3:
-            text += f"   {feedback.streak} in Folge!"
+        elif feedback.streak >= 2:
+            factor = f"{streak_factor(feedback.streak):g}".replace(".", ",")
+            text += f"   {feedback.streak} in Folge: ×{factor}"
         c.itemconfigure(self.message, text=text, fill=GOOD)
         self._jump(f"{tag}_face")
-        self._float_points(x, y - 70, f"+{feedback.points}")
+        if feedback.points:
+            self._float_points(x, y - 70, f"+{feedback.points}")
         for d in self.drawings:
             d.mark(choice, GOOD)
         self.later(750, self._next_round)
@@ -489,16 +495,16 @@ class GameWindow:
             self.canvas.move(tag, 0, offsets[frame])
             self.later(25, lambda: self._jump(tag, frame + 1))
 
-    def _float_points(self, x: float, y: float, text: str, frame: int = 0) -> None:
+    def _float_points(self, x: float, y: float, text: str, frame: int = 0, color: str = GOLD) -> None:
         c = self.canvas
         if frame == 0:
-            self._float_id = c.create_text(x, y, text=text, font=(FONT, 20, "bold"), fill=GOLD, tags=("float",))
+            self._float_id = c.create_text(x, y, text=text, font=(FONT, 20, "bold"), fill=color, tags=("float",))
         elif frame < 18:
             c.move(self._float_id, 0, -2.5)
         else:
             c.delete(self._float_id)
             return
-        self.later(30, lambda: self._float_points(x, y, text, frame + 1))
+        self.later(30, lambda: self._float_points(x, y, text, frame + 1, color))
 
     def _reveal(self, choice: int, feedback: Feedback) -> None:
         s = self.session
@@ -514,7 +520,11 @@ class GameWindow:
         for d in self.drawings:
             d.mark(feedback.answer, GOLD)
         right, wrong = s.characters[feedback.answer].name, s.characters[choice].name
-        c.itemconfigure(self.message, text=f"Leider nicht – {right} ist am schwersten.", fill=BAD)
+        minus = f"  {feedback.points}".replace("-", "−") if feedback.points else ""
+        c.itemconfigure(self.message, text=f"Leider nicht – {right} ist am schwersten.{minus}", fill=BAD)
+        if feedback.points:
+            _t, _b, wx, wy = self.cards[choice]
+            self._float_points(wx, wy - 70, f"{feedback.points}".replace("-", "−"), color=BAD)
         if s.is_practice:
             lines = [explain_with_names(line, s.characters) for line in self.round.why_lighter(choice)]
             self._panel(f"Warum ist {wrong} leichter als {right}?", lines)

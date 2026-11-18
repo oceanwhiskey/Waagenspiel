@@ -137,6 +137,10 @@ h2 { font-size: 1rem; margin: 12px 0 6px; }
 .message.good-text { color: var(--good); }
 .message.bad-text { color: var(--bad); }
 
+.penalty { text-align: center; color: var(--soft); font-size: 0.85rem; margin: -4px 0 6px; min-height: 1.2em; font-variant-numeric: tabular-nums; }
+.penalty b { color: var(--bad); }
+.float.minus { color: var(--bad); }
+
 .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
 
 .card {

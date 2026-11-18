@@ -207,8 +207,28 @@ export const DIFFICULTIES = {
 
 // --- Partie ------------------------------------------------------------------
 
+// Richtig: Wert des Raetsels (10 je Stufe) mal Serienfaktor (+0,25 je Richtige in
+// Folge, hoechstens x3). Falsch: Abzug; sofort geklickt der volle Wert, mit der
+// Bedenkzeit gleichmaessig sinkend bis auf ein Drittel (nach 5 s je Stufe). Bei
+// einem Drittel bringt blindes Raten unter vier Figuren im Schnitt nichts mehr.
+export const SETTLE_SECONDS = 0.75; // so lange pendeln die Waagen ein
+export const MAX_FACTOR = 3;
+
+export const valueOf = (level) => 10 * level;
+export const thinkSeconds = (level) => 5 * level;
+
+export function streakFactor(streak) {
+  return Math.min(1 + 0.25 * (Math.max(streak, 1) - 1), MAX_FACTOR);
+}
+
 export function pointsFor(level, streak) {
-  return 10 * level + Math.min(2 * (streak - 1), 20);
+  return Math.round(valueOf(level) * streakFactor(streak));
+}
+
+/** Abzug (positiv) fuer eine falsche Antwort nach `seconds` Bedenkzeit. */
+export function penaltyFor(level, seconds) {
+  const share = Math.min(1, Math.max(0, seconds) / thinkSeconds(level));
+  return Math.round(valueOf(level) * (1 - (2 / 3) * share));
 }
 
 /** Eine Partie auf Zeit (timeLimit Sekunden) oder zum Ueben (timeLimit null). */
@@ -218,6 +238,7 @@ export class GameSession {
     this.rounds = this.correct = this.wrong = this.points = this.streak = this.bestStreak = 0;
     this.current = null;
     this.startedAt = null;
+    this.shownAt = null;
   }
 
   get isPractice() {
@@ -231,7 +252,19 @@ export class GameSession {
 
   nextRound() {
     this.current = this.source.next(this.difficulty.level);
+    this.shownAt = this.clock();
     return this.current;
+  }
+
+  /** Bedenkzeit der aktuellen Runde, ab dem Einpendeln der Waagen. */
+  thinkingTime() {
+    return this.shownAt == null ? 0 : Math.max(0, this.clock() - this.shownAt - SETTLE_SECONDS);
+  }
+
+  /** Was ein Fehler jetzt kosten wuerde (0 beim Ueben). */
+  currentPenalty() {
+    if (!this.current || this.isPractice) return 0;
+    return penaltyFor(this.current.level, this.thinkingTime());
   }
 
   timeLeft() {
@@ -248,21 +281,23 @@ export class GameSession {
   answer(choice) {
     const round = this.current;
     if (!round) throw new Error("Es laeuft keine Runde");
+    const penalty = this.currentPenalty();
     this.current = null;
     const correct = choice === round.answer;
     const levelBefore = this.difficulty.level;
     this.rounds += 1;
-    let points = 0;
+    let points;
     if (correct) {
       this.correct += 1;
       this.streak += 1;
       this.bestStreak = Math.max(this.bestStreak, this.streak);
-      points = pointsFor(round.level, this.streak);
-      this.points += points;
+      points = this.isPractice ? 0 : pointsFor(round.level, this.streak);
     } else {
       this.wrong += 1;
       this.streak = 0;
+      points = -penalty;
     }
+    this.points += points;
     this.difficulty.record(correct);
     return { correct, answer: round.answer, points, streak: this.streak, levelBefore, levelAfter: this.difficulty.level };
   }
@@ -276,7 +311,8 @@ export class GameSession {
 // --- Bestenliste ----------------------------------------------------------------
 
 export class Highscores {
-  constructor(storage, key = "waagenspiel.bestenliste") {
+  // "-v2": seit den Minuspunkten sind alte Rekorde nicht mehr vergleichbar
+  constructor(storage, key = "waagenspiel.rekorde-v2") {
     this.storage = storage;
     this.key = key;
     try {

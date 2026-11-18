@@ -19,7 +19,10 @@ from waagenspiel.game import (
     pan_items,
     pan_positions,
     pick_characters,
+    SETTLE_SECONDS,
+    penalty_for,
     points_for,
+    think_seconds,
     round_from_scales,
 )
 from waagenspiel.puzzle import Scale, forces_heaviest
@@ -142,24 +145,58 @@ def test_real_catalog_offers_every_level() -> None:
 # --- Partie -----------------------------------------------------------------
 
 
-def test_correct_answers_score_more_in_a_row() -> None:
+def test_streak_multiplies_the_value_up_to_three_times() -> None:
+    assert [points_for(4, n) for n in (1, 2, 3, 5, 9, 20)] == [40, 50, 60, 80, 120, 120]
     session = GameSession(ListSource(), FixedDifficulty(2), clock=FakeClock())
     first = session.start()
-    feedback = session.answer(first.answer)
-    assert feedback.correct and feedback.points == points_for(2, 1) == 20
+    assert session.answer(first.answer).points == 20
     second = session.next_round()
-    assert session.answer(second.answer).points == 22
+    assert session.answer(second.answer).points == 25
     assert session.result().best_streak == 2
 
 
-def test_wrong_answer_reveals_the_right_one_and_breaks_the_streak() -> None:
-    session = GameSession(ListSource(), FixedDifficulty(1), clock=FakeClock())
+def test_penalty_shrinks_with_thinking_time_to_a_third() -> None:
+    assert penalty_for(4, 0) == 40
+    assert penalty_for(4, 10) == 27
+    assert penalty_for(4, 20) == penalty_for(4, 999) == 13
+    assert penalty_for(1, 5) == 3
+
+
+def test_blind_guessing_never_pays_off() -> None:
+    for level in range(1, 5):
+        for seconds in (0, 1, think_seconds(level) / 2, think_seconds(level), 100):
+            assert 0.25 * points_for(level, 1) - 0.75 * penalty_for(level, seconds) <= 0.5
+
+
+def test_wrong_answer_costs_points_and_breaks_the_streak() -> None:
+    clock = FakeClock()
+    session = GameSession(ListSource(), FixedDifficulty(1), clock=clock)
     current = session.start()
-    wrong = (current.answer + 1) % 4
-    feedback = session.answer(wrong)
+    clock.now += SETTLE_SECONDS  # sofort nach dem Einpendeln falsch geklickt
+    assert session.current_penalty() == 10
+    feedback = session.answer((current.answer + 1) % 4)
     assert not feedback.correct and feedback.answer == current.answer and feedback.streak == 0
+    assert feedback.points == -10
     result = session.result()
-    assert (result.rounds, result.correct, result.wrong, result.points) == (1, 0, 1, 0)
+    assert (result.rounds, result.correct, result.wrong, result.points) == (1, 0, 1, -10)
+
+
+def test_thinking_longer_makes_a_mistake_cheaper() -> None:
+    clock = FakeClock()
+    session = GameSession(ListSource(), FixedDifficulty(3), clock=clock)
+    current = session.start()
+    clock.now += SETTLE_SECONDS + 15
+    assert session.answer((current.answer + 1) % 4).points == -10
+
+
+def test_practice_counts_no_points() -> None:
+    session = GameSession(ListSource(), FixedDifficulty(4), time_limit=None, clock=FakeClock())
+    current = session.start()
+    assert session.answer(current.answer).points == 0
+    current = session.next_round()
+    assert session.current_penalty() == 0
+    assert session.answer((current.answer + 1) % 4).points == 0
+    assert session.result().points == 0
 
 
 def test_game_ends_when_time_is_up() -> None:

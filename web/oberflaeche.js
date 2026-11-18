@@ -10,6 +10,7 @@ import {
   explain,
   pickCharacters,
   stepsFor,
+  streakFactor,
 } from "./spiel.js";
 import { ScaleDrawing, animateTilt, character, characterIcon } from "./figuren.js";
 import { GlobalBoard, beatsRecord, validName } from "./bestenliste.js";
@@ -335,7 +336,7 @@ class App {
   updateHeader() {
     const s = this.session;
     $("stand").textContent = `Runde ${s.rounds + 1}  ✔ ${s.correct}  ✘ ${s.wrong}`;
-    $("punkte").textContent = `★ ${s.points}`;
+    $("punkte").textContent = s.isPractice ? "" : `★ ${s.points}`;
     const streak = s.streak >= 2 ? ` · Serie ${s.streak}` : "";
     $("stufe").textContent = `Stufe: ${LEVEL_TITLES[s.difficulty.level]}${streak}`;
   }
@@ -346,6 +347,7 @@ class App {
     const left = s.timeLeft();
     const share = left / s.timeLimit;
     $("uhr").textContent = `⏱ ${Math.ceil(left)} s`;
+    if (this.accepting) this.showPenalty();
     $("uhr").classList.toggle("knapp", left <= 10);
     const bar = $("zeitbalken").firstElementChild;
     bar.style.width = `${share * 100}%`;
@@ -397,12 +399,25 @@ class App {
     this.drawings = this.round.views.map((view, k) => new ScaleDrawing(field, ...SPOTS[k], view, s.characters));
     this.hintIndex = 0;
     this.accepting = true;
+    this.showPenalty();
     animateTilt(this.drawings);
+  }
+
+  /** Zeigt, was ein Fehler gerade kosten wuerde (sinkt mit der Bedenkzeit). */
+  showPenalty() {
+    const s = this.session;
+    const box = $("abzug");
+    if (!s || s.isPractice || !this.accepting) {
+      box.textContent = "";
+      return;
+    }
+    box.innerHTML = `Ein Fehler kostet gerade <b>−${s.currentPenalty()}</b>`;
   }
 
   choose(choice) {
     if (!this.accepting || !this.session) return;
     this.accepting = false;
+    $("abzug").textContent = "";
     const feedback = this.session.answer(choice);
     this.updateHeader();
     if (feedback.correct) this.celebrate(choice, feedback);
@@ -413,25 +428,27 @@ class App {
     this.resetCards();
     this.cards[choice].classList.add("richtig");
     this.drawings.forEach((d) => d.mark(choice, "richtig"));
-    let text = `Richtig!  +${feedback.points}`;
+    let text = feedback.points ? `Richtig!  +${feedback.points}` : "Richtig!";
     if (feedback.levelAfter > feedback.levelBefore) {
       text += `  Neue Stufe: ${LEVEL_TITLES[feedback.levelAfter]}!`;
       this.sound.levelUp();
     } else {
-      if (feedback.streak >= 3) text += `  ${feedback.streak} in Folge!`;
+      if (feedback.streak >= 2 && feedback.points) {
+        text += `  · ${feedback.streak} in Folge ×${String(streakFactor(feedback.streak)).replace(".", ",")}`;
+      }
       this.sound.right();
     }
     const msg = $("nachricht");
     msg.className = "message good-text";
     msg.textContent = text;
-    this.floatPoints(this.cards[choice], `+${feedback.points}`);
+    if (feedback.points) this.floatPoints(this.cards[choice], `+${feedback.points}`);
     this.later(750, () => this.nextRound());
   }
 
-  floatPoints(card, text) {
+  floatPoints(card, text, minus = false) {
     const rect = card.getBoundingClientRect();
     const node = document.createElement("div");
-    node.className = "float";
+    node.className = minus ? "float minus" : "float";
     node.textContent = text;
     node.style.left = `${rect.left + rect.width / 2}px`;
     node.style.top = `${rect.top - 34}px`;
@@ -451,7 +468,8 @@ class App {
     const wrong = s.characters[choice].name;
     const msg = $("nachricht");
     msg.className = "message bad-text";
-    msg.textContent = `Leider nicht – ${right} ist am schwersten.`;
+    msg.textContent = `Leider nicht – ${right} ist am schwersten.` + (feedback.points ? `  ${feedback.points}`.replace("-", "−") : "");
+    if (feedback.points) this.floatPoints(this.cards[choice], `${feedback.points}`.replace("-", "−"), true);
     if (s.isPractice) {
       const lines = stepsFor(this.round, choice).flatMap((step) => step.text);
       $("karten").hidden = true; // Antwort steht fest: Platz fuer Erklaerung und Waagen
@@ -556,7 +574,7 @@ class App {
 // Muss zu <meta name="waagenspiel-version"> in index.html passen; bei jedem Update
 // beider Dateien erhoehen. Passt es nicht (alte Seite aus dem Browser-Cache, neues
 // Skript), wird die Seite einmal neu geladen.
-const VERSION = "4";
+const VERSION = "5";
 
 function pageIsCurrent() {
   const meta = document.querySelector('meta[name="waagenspiel-version"]');

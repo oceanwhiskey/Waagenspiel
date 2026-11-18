@@ -16,6 +16,7 @@
     import {
       FixedDifficulty, GameSession, Highscores, RisingDifficulty, RoundSource, explain, makeRound,
       panItems, panPositions, parseScale, pickCharacters, pointsFor, scaleView, seededRandom, stepsFor,
+      penaltyFor, thinkSeconds, SETTLE_SECONDS,
     } from "./spiel.js";
     import { GlobalBoard, beatsRecord, validName } from "./bestenliste.js";
 
@@ -156,20 +157,46 @@
       for (let i = 0; i < 3; i++) eq(source.next(1).level, 1);
     });
 
-    await test("Richtige in Folge geben mehr Punkte", () => {
+    await test("Serie vervielfacht den Wert bis hoechstens x3 (wie in Python)", () => {
+      eq([1, 2, 3, 5, 9, 20].map((n) => pointsFor(4, n)), [40, 50, 60, 80, 120, 120]);
+      clock.now = 100;
       const s = new GameSession({ source: fixedSource, difficulty: new FixedDifficulty(2), clock, characters: [] });
       const r = s.start();
-      eq(s.answer(r.answer).points, pointsFor(2, 1));
-      eq(s.answer(s.nextRound().answer).points, 22);
+      eq(s.answer(r.answer).points, 20);
+      eq(s.answer(s.nextRound().answer).points, 25);
       eq(s.result().bestStreak, 2);
     });
 
-    await test("Falsche Antwort nennt die richtige und bricht die Serie", () => {
-      const s = new GameSession({ source: fixedSource, difficulty: new FixedDifficulty(1), clock, characters: [] });
+    await test("Abzug sinkt mit der Bedenkzeit bis auf ein Drittel; Raten lohnt nie", () => {
+      eq([0, 10, 20, 999].map((t) => penaltyFor(4, t)), [40, 27, 13, 13]);
+      eq(penaltyFor(1, 5), 3);
+      for (let level = 1; level <= 4; level++) {
+        for (const t of [0, 1, thinkSeconds(level) / 2, thinkSeconds(level), 100]) {
+          ok(0.25 * pointsFor(level, 1) - 0.75 * penaltyFor(level, t) <= 0.5, `Stufe ${level}, ${t} s`);
+        }
+      }
+    });
+
+    await test("Falsche Antwort kostet Punkte, nennt die richtige und bricht die Serie", () => {
+      clock.now = 100;
+      const s = new GameSession({ source: fixedSource, difficulty: new FixedDifficulty(3), clock, characters: [] });
       const r = s.start();
+      clock.now = 100 + SETTLE_SECONDS + 15;
+      eq(s.currentPenalty(), 10);
       const f = s.answer((r.answer + 1) % 4);
-      eq([f.correct, f.answer, f.streak], [false, r.answer, 0]);
-      eq(s.result(), { rounds: 1, correct: 0, wrong: 1, points: 0, bestStreak: 0 });
+      eq([f.correct, f.answer, f.streak, f.points], [false, r.answer, 0, -10]);
+      eq(s.result(), { rounds: 1, correct: 0, wrong: 1, points: -10, bestStreak: 0 });
+    });
+
+    await test("Ueben zaehlt keine Punkte", () => {
+      clock.now = 100;
+      const s = new GameSession({ source: fixedSource, difficulty: new FixedDifficulty(4), timeLimit: null, clock, characters: [] });
+      const r = s.start();
+      eq(s.answer(r.answer).points, 0);
+      const r2 = s.nextRound();
+      eq(s.currentPenalty(), 0);
+      eq(s.answer((r2.answer + 1) % 4).points, 0);
+      eq(s.result().points, 0);
     });
 
     await test("Partie endet nach der Zeit; Ueben endet nie", () => {
@@ -204,7 +231,7 @@
       ok(h.submit(key, 50));
       ok(!h.submit(key, 40));
       eq(new Highscores(storage).get(key), 50);
-      store.set("waagenspiel.bestenliste", "kaputt");
+      store.set("waagenspiel.rekorde-v2", "kaputt");
       eq(new Highscores(storage).get(key), 0);
     });
 

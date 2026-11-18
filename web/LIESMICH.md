@@ -69,7 +69,7 @@ in einer vollen Partie auf Zeit bricht, darf sich mit einem Namen eintragen.
   Der Schlüssel steht deshalb in keinem Repository.
 - Schutz gegen einfaches Schummeln: Beim Spielstart gibt es eine signierte
   Spielmarke. Der Server nimmt sie erst nach Ablauf der Spielzeit an, nur
-  einmal und nur mit glaubwürdigen Punkten (höchstens 60 je Sekunde). Wer es
+  einmal und nur mit glaubwürdigen Punkten (höchstens 150 je Sekunde). Wer es
   darauf anlegt, kann im Browser trotzdem schummeln.
 - Zurücksetzen: `bestenliste-daten/daten.json` löschen. Einen einzelnen
   Eintrag entfernen: in dieser Datei den Eintrag der Kategorie löschen.

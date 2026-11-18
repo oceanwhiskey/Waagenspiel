@@ -307,7 +307,7 @@ Clock = Callable[[], float]
 class Feedback:
     correct: bool
     answer: int
-    points: int
+    points: int  # gewonnen (positiv) oder abgezogen (negativ); beim Ueben 0
     streak: int
     level_before: int
     level_after: int
@@ -322,10 +322,46 @@ class Result:
     best_streak: int
 
 
-def points_for(level: int, streak: int) -> int:
-    """10 Punkte je Stufe, dazu 2 Punkte je Richtige in Folge (hoechstens 20)."""
+# --- Punkte ------------------------------------------------------------------
+#
+# Richtig: Wert des Raetsels (10 je Stufe) mal Serienfaktor. Der Faktor waechst
+# je Richtige in Folge um 0,25 bis hoechstens 3.
+# Falsch: Abzug. Wer sofort klickt, verliert den vollen Wert; mit der
+# Bedenkzeit sinkt der Abzug gleichmaessig bis auf ein Drittel (nach 5 s je
+# Stufe). Bei einem Drittel bringt blindes Raten unter vier Figuren im Schnitt
+# nichts mehr: 1/4 * W - 3/4 * W/3 = 0.
 
-    return 10 * level + min(2 * (streak - 1), 20)
+SETTLE_SECONDS = 0.75  # so lange pendeln die Waagen ein; erst danach laeuft die Bedenkzeit
+MAX_FACTOR = 3.0
+
+
+def value_of(level: int) -> int:
+    return 10 * level
+
+
+def streak_factor(streak: int) -> float:
+    """Serienfaktor: x1 beim ersten Treffer, +0,25 je weiteren, hoechstens x3."""
+
+    return min(1 + 0.25 * (max(streak, 1) - 1), MAX_FACTOR)
+
+
+def points_for(level: int, streak: int) -> int:
+    """Punkte fuer eine richtige Antwort als ``streak``-te Richtige in Folge."""
+
+    return round(value_of(level) * streak_factor(streak))
+
+
+def think_seconds(level: int) -> float:
+    """Bedenkzeit, nach der der Abzug sein Minimum erreicht."""
+
+    return 5.0 * level
+
+
+def penalty_for(level: int, seconds: float) -> int:
+    """Abzug fuer eine falsche Antwort nach ``seconds`` Bedenkzeit (positiv)."""
+
+    share = min(1.0, max(0.0, seconds) / think_seconds(level))
+    return round(value_of(level) * (1 - 2 / 3 * share))
 
 
 class GameSession:
@@ -348,6 +384,7 @@ class GameSession:
         self.streak = self.best_streak = 0
         self.current: Round | None = None
         self.started_at: float | None = None
+        self.shown_at: float | None = None
 
     @property
     def is_practice(self) -> bool:
@@ -359,7 +396,22 @@ class GameSession:
 
     def next_round(self) -> Round:
         self.current = self.source.next_round(self.difficulty.level)
+        self.shown_at = self.clock()
         return self.current
+
+    def thinking_time(self) -> float:
+        """Bedenkzeit der aktuellen Runde (ab dem Einpendeln der Waagen)."""
+
+        if self.shown_at is None:
+            return 0.0
+        return max(0.0, self.clock() - self.shown_at - SETTLE_SECONDS)
+
+    def current_penalty(self) -> int:
+        """Was ein Fehler jetzt kosten wuerde (0 beim Ueben)."""
+
+        if self.current is None or self.is_practice:
+            return 0
+        return penalty_for(self.current.level, self.thinking_time())
 
     def time_left(self) -> float | None:
         if self.time_limit is None or self.started_at is None:
@@ -375,20 +427,21 @@ class GameSession:
 
         if self.current is None:
             raise RuntimeError("Es laeuft keine Runde")
+        penalty = self.current_penalty()
         current, self.current = self.current, None
         correct = current.is_correct(choice)
         level_before = self.difficulty.level
         self.rounds += 1
-        points = 0
         if correct:
             self.correct += 1
             self.streak += 1
             self.best_streak = max(self.best_streak, self.streak)
-            points = points_for(current.level, self.streak)
-            self.points += points
+            points = 0 if self.is_practice else points_for(current.level, self.streak)
         else:
             self.wrong += 1
             self.streak = 0
+            points = -penalty
+        self.points += points
         self.difficulty.record(correct)
         return Feedback(correct, current.answer, points, self.streak, level_before, self.difficulty.level)
 
@@ -435,4 +488,5 @@ class Highscores:
         return True
 
 
-DEFAULT_HIGHSCORES = Path.home() / ".waagenspiel" / "bestenliste.json"
+# Neue Datei seit den Minuspunkten: alte Rekorde sind nicht vergleichbar.
+DEFAULT_HIGHSCORES = Path.home() / ".waagenspiel" / "rekorde-v2.json"

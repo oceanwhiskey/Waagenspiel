@@ -20,7 +20,7 @@ declare(strict_types=1);
 const DATEN_ORDNER = __DIR__ . '/bestenliste-daten';
 const STUFEN = ['Steigend', 'Leicht', 'Mittel', 'Schwer', 'Profi'];
 const ZEITEN = [30, 60, 90, 120];
-const PUNKTE_JE_SEKUNDE = 60;   // hoechstens 60 Punkte je Runde, mindestens 1 s je Runde
+const PUNKTE_JE_SEKUNDE = 150;  // hoechstens 120 Punkte je Runde (Profi, Serie x3), mindestens ~0,8 s je Runde
 const VERLAUF = 5;              // so viele fruehere Rekorde je Kategorie bleiben stehen
 
 header('Content-Type: application/json; charset=utf-8');
