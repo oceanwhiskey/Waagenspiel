@@ -553,7 +553,28 @@ class App {
 
 // --- Start ------------------------------------------------------------------------
 
+// Muss zu <meta name="waagenspiel-version"> in index.html passen; bei jedem Update
+// beider Dateien erhoehen. Passt es nicht (alte Seite aus dem Browser-Cache, neues
+// Skript), wird die Seite einmal neu geladen.
+const VERSION = "4";
+
+function pageIsCurrent() {
+  const meta = document.querySelector('meta[name="waagenspiel-version"]');
+  if (meta?.content === VERSION) return true;
+  // Bis zu zweimal neu laden: Beim ersten Mal kann noch der alte Service Worker
+  // die alte Seite liefern, beim zweiten Mal ist der neue aktiv.
+  let tries = 0;
+  try { tries = Number(sessionStorage.getItem(`waagenspiel.neuladen.${VERSION}`)) || 0; } catch { /* egal */ }
+  if (tries < 2) {
+    try { sessionStorage.setItem(`waagenspiel.neuladen.${VERSION}`, String(tries + 1)); } catch { /* egal */ }
+    setTimeout(() => location.reload(), tries * 400);
+    return false;
+  }
+  return true; // lieber mit Fehlerhinweis weiter als endlos laden
+}
+
 async function main() {
+  if (!pageIsCurrent()) return;
   const button = $("los");
   button.disabled = true;
   $("laden").textContent = "Rätsel werden geladen …";
@@ -565,13 +586,19 @@ async function main() {
     return;
   }
   const source = new RoundSource(data.levels);
-  const app = new App({
-    makeSession: (difficulty, timeLimit, characters) =>
-      new GameSession({ source, difficulty: DIFFICULTIES[difficulty](), timeLimit, characters }),
-    highscores: new Highscores(store),
-    sound: new Sound(store),
-    board: new GlobalBoard(),
-  });
+  let app;
+  try {
+    app = new App({
+      makeSession: (difficulty, timeLimit, characters) =>
+        new GameSession({ source, difficulty: DIFFICULTIES[difficulty](), timeLimit, characters }),
+      highscores: new Highscores(store),
+      sound: new Sound(store),
+      board: new GlobalBoard(),
+    });
+  } catch (error) {
+    $("laden").textContent = "Das Spiel wurde gerade aktualisiert. Bitte die Seite neu laden.";
+    throw error;
+  }
   window.waagenspiel = app; // fuer Tests im Browser
   button.disabled = false;
   $("laden").textContent = "";

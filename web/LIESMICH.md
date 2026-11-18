@@ -19,6 +19,15 @@ Startbildschirm legen und funktioniert danach auch offline.
 Auf dem Handy: Seite öffnen, dann im Browser-Menü „Zum Startbildschirm“
 (Android: Chrome-Menü ⋮, iPhone: Teilen-Knopf).
 
+## Aktualisieren
+
+Geänderte Dateien einfach erneut hochladen. Die `.htaccess` sorgt dafür, dass
+Browser jedes Mal kurz nachfragen (`Cache-Control: no-cache`), und der Service
+Worker holt immer zuerst die neue Fassung. Wenn sich `index.html` und
+`oberflaeche.js` gemeinsam ändern, die Versionsnummer in beiden erhöhen
+(`<meta name="waagenspiel-version">` und `VERSION`). Erwischt ein Browser
+dann noch die alte Seite, lädt das Spiel sie von selbst neu.
+
 ## Lokal ausprobieren
 
 ```bash

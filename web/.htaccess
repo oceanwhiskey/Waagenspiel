@@ -12,3 +12,11 @@ AddType application/json .json
 <Files "tests.html">
   Require all denied
 </Files>
+
+# Spieldateien bei jedem Aufruf kurz pruefen lassen (304, wenn unveraendert),
+# damit nach einem Update nie alte und neue Dateien gemischt werden.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html|js|css|json|webmanifest|php)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>

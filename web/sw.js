@@ -1,7 +1,7 @@
 // Offline-Speicher: zuerst das Netz (immer die neueste Version), sonst der Speicher.
 // Nur die Dateien des Spiels selbst; alles andere auf derselben Seite (z. B. Noten,
 // Musik) geht unberuehrt am Service Worker vorbei.
-const CACHE = "waagenspiel-v3";
+const CACHE = "waagenspiel-v4";
 const FILES = [
   "./", "index.html", "spiel.css", "spiel.js", "figuren.js", "oberflaeche.js", "bestenliste.js", "raetsel.json",
   "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png", "icon-180.png",
@@ -26,7 +26,8 @@ self.addEventListener("fetch", (event) => {
   url.search = "";
   if (event.request.method !== "GET" || !GAME_URLS.has(url.href)) return;
   event.respondWith(
-    fetch(event.request)
+    // immer beim Server nachfragen (ohne Browser-Cache), damit HTML und Skripte zusammenpassen
+    fetch(event.request.url, { cache: "no-cache", credentials: "same-origin" })
       .then((response) => {
         const copy = response.clone();
         if (response.ok) caches.open(CACHE).then((cache) => cache.put(event.request, copy));
