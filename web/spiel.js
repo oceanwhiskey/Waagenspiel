@@ -118,7 +118,9 @@ export function makeRound(puzzle, level, random, mirror = true) {
     requires: step.r.map(([u, v]) => [perm[u], perm[v]]),
     text: step.t,
   }));
-  return { scales, views, answer: perm[0], level, perm, order, steps };
+  // Tipps: zuerst die Abkuerzung (falls es eine gibt), dann die Loesungsschritte
+  const hints = [...(puzzle.k ? [puzzle.k] : []), ...steps.map((s) => s.text)];
+  return { scales, views, answer: perm[0], level, perm, order, steps, hints };
 }
 
 /** Die Schritte, die zeigen, dass `choice` leichter ist als die Antwort. */

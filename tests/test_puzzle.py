@@ -19,8 +19,10 @@ from waagenspiel.puzzle import (
     canonical_form,
     derive,
     explain,
+    free_heaviest,
     heaviest,
     is_minimal,
+    level_of,
     satisfiable,
     solve,
 )
@@ -184,8 +186,8 @@ def test_graph_theorem_matches_the_linear_test() -> None:
     ("texts", "level"),
     [
         (("b + c < a", "d < a"), 1),
-        (("d < c", "c < b", "b < a"), 2),
-        (("3d < 2a + c", "b + c < a"), 2),
+        (("d < c", "c < b", "a = 2b"), 2),
+        (("3d = 2a + c", "b + c < a"), 2),
         (("2d < 3c", "3b < c + d", "2a = 3c"), 3),
         (("c + 2d < 2a + b", "b + 2d = 3c", "a + b + c = 3d"), 4),
     ],
@@ -201,6 +203,24 @@ def test_levels(texts: tuple[str, ...], level: int) -> None:
         # Jeder benutzte bekannte Vergleich wird vorher gezeigt.
         earlier = {(s.lighter, s.heavier) for s in solution.steps[: solution.steps.index(step)]}
         assert set(step.requires) <= earlier
+
+
+@pytest.mark.parametrize(
+    "texts",
+    [("d < c", "c < b", "b < a"), ("3d < 2a + c", "b + c < a"), ("2b < a + c", "3c < 2a + d", "2d < a + b")],
+)
+def test_figure_only_on_heavier_sides_is_a_shortcut_to_level_one(texts: tuple[str, ...]) -> None:
+    system = scales(*texts)
+    assert free_heaviest(system) == 0 == heaviest(system)
+    solution = solve(system)
+    assert solution.level == 1 == level_of(system) and solution.shortcut == 0
+    assert solution.steps  # der ausfuehrliche Beweis bleibt als Tipp erhalten
+
+
+def test_balance_or_lighter_side_blocks_the_shortcut() -> None:
+    assert free_heaviest(scales("d < c", "c < b", "a = 2b")) is None
+    assert free_heaviest(scales("2d < 3c", "3b < c + d", "2a = 3c")) is None
+    assert free_heaviest(scales("c + 2d < 2a + b", "b + 2d = 3c", "a + b + c = 3d")) is None
 
 
 def test_level_three_uses_short_chain_for_b() -> None:

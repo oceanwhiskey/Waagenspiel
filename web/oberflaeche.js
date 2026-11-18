@@ -347,12 +347,12 @@ class App {
 
   showHint() {
     if (!this.accepting || !this.session?.isPractice) return;
-    const steps = this.round.steps;
-    if (!steps.length) return;
-    const index = Math.min(this.hintIndex, steps.length - 1);
+    const hints = this.round.hints;
+    if (!hints.length) return;
+    const index = Math.min(this.hintIndex, hints.length - 1);
     this.hintIndex = index + 1;
-    this.openSheet(`Tipp ${index + 1} von ${steps.length}`, steps[index].text, {
-      more: this.hintIndex < steps.length,
+    this.openSheet(`Tipp ${index + 1} von ${hints.length}`, hints[index], {
+      more: this.hintIndex < hints.length,
       ok: "OK",
     });
     this.afterSheet = null;

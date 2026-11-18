@@ -11,6 +11,7 @@ Format von web/raetsel.json::
 
     {"levels": {"1": [puzzle, ...], ...}}
     puzzle = {"s": ["b + c < a", ...],
+              "k": ["Zeile", ...],          # nur bei Abkuerzung (Stufe 1 per Trick)
               "steps": [{"f": [x, h], "r": [[u, v], ...], "t": ["Zeile", ...]}, ...]}
 
 ``f`` ist der gezeigte Vergleich (x leichter als h, Indizes 0-3 fuer a-d),
@@ -30,7 +31,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from waagenspiel.catalog import load_catalog  # noqa: E402
-from waagenspiel.puzzle import Scale, solve  # noqa: E402
+from waagenspiel.puzzle import Scale, shortcut_lines, solve  # noqa: E402
 
 DEFAULT_OUT = ROOT / "web" / "raetsel.json"
 
@@ -49,8 +50,11 @@ def export(per_level: int, seed: int, out: Path) -> dict[str, int]:
         for i, texts in enumerate(chosen):
             solution = solve([Scale.parse(t) for t in texts])
             assert solution.top == 0 and solution.level == level
+            puzzle: dict[str, object] = {"s": list(texts)}
+            if solution.shortcut is not None:
+                puzzle["k"] = shortcut_lines(solution.shortcut)
             puzzles.append({
-                "s": list(texts),
+                **puzzle,
                 "steps": [
                     {"f": [step.lighter, step.heavier], "r": [list(p) for p in step.requires], "t": step.lines()}
                     for step in solution.steps

@@ -541,11 +541,16 @@ class Solution:
     Waage plus bekannte Vergleiche. Stufe 3 (kombinieren): Manche Schritte
     brauchen zwei Waagen gleichzeitig. Stufe 4 (aufloesen): Es gelingt erst mit
     allen drei Waagen zugleich; man muss das Gleichungssystem loesen.
+
+    Abkuerzung (``shortcut``): Liegt eine Figur nur auf schwereren Seiten
+    geneigter Waagen, ist sie die Schwerste (siehe :func:`free_heaviest`).
+    Solche Raetsel zaehlen immer als Stufe 1.
     """
 
     top: int
     level: int
     steps: tuple[Step, ...]
+    shortcut: int | None = None
 
     @property
     def level_name(self) -> str:
@@ -623,6 +628,36 @@ def _levels(
     return level, known
 
 
+def free_heaviest(scales: Sequence[Scale]) -> int | None:
+    """Die Figur, die nur auf schwereren Seiten geneigter Waagen liegt.
+
+    Sie kommt vor, aber nie auf einer leichteren Seite und nie in einem
+    Gleichgewicht. Dann laesst sie sich beliebig schwer machen, ohne eine Waage
+    zu verletzen; in einer Loesung ist sie also die Schwerste. Hat das Raetsel
+    einen eindeutig Schwersten, ist er in jeder Loesung derselbe, also ist es
+    diese Figur. Der Schluss nutzt die Zusage, dass es genau eine Antwort gibt.
+    Gibt es keine oder mehrere solche Figuren, liefert die Funktion ``None``.
+    """
+
+    free = [
+        x for x in range(4)
+        if any(s.right[x] for s in scales)
+        and not any(s.left[x] or (s.operator == "=" and s.right[x]) for s in scales)
+    ]
+    return free[0] if len(free) == 1 else None
+
+
+def shortcut_lines(x: int) -> list[str]:
+    """Erklaerung der Abkuerzung aus :func:`free_heaviest` fuer Figur ``x``."""
+
+    n = NAMES[x]
+    return [
+        f"{n} liegt nur auf schwereren Seiten, nie auf einer leichteren und nie im Gleichgewicht.",
+        f"Man kann {n} also beliebig schwer machen, und alle Waagen stimmen weiter.",
+        f"Es gibt genau eine schwerste Figur, also ist es {n}.",
+    ]
+
+
 ALL_PAIRS: tuple[tuple[int, int], ...] = tuple((u, v) for u in range(4) for v in range(4) if u != v)
 
 
@@ -639,6 +674,8 @@ def level_of(scales: Sequence[Scale], top: int | None = None, entails: Entails |
         top = heaviest(scales)
         if top is None:
             raise ValueError("Der Schwerste ist nicht eindeutig")
+    if free_heaviest(scales) == top:
+        return 1
     return _levels(scales, top, ALL_PAIRS, entails or forces_lighter)[0]
 
 
@@ -676,7 +713,11 @@ def solve(scales: Sequence[Scale]) -> Solution:
 
     for goal in goals:
         build(goal)
-    return Solution(top, level, tuple(built.values()))
+    shortcut = free_heaviest(scales)
+    if shortcut is not None:
+        assert shortcut == top
+        level = 1
+    return Solution(top, level, tuple(built.values()), shortcut)
 
 
 # --------------------------------------------------------------------------
@@ -721,6 +762,7 @@ class Puzzle:
             "example_weights": dict(zip(NAMES, self.weights)),
             "difficulty": self.difficulty,
             "difficulty_name": self.solution.level_name,
+            "shortcut": None if self.solution.shortcut is None else shortcut_lines(self.solution.shortcut),
             "steps": [step.to_json() for step in self.solution.steps],
         }
 

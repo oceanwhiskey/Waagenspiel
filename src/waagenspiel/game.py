@@ -22,7 +22,7 @@ from math import gcd
 from pathlib import Path
 from typing import Callable, Iterable, Protocol, Sequence
 
-from .puzzle import NAMES, Scale, Solution, heaviest, solve
+from .puzzle import NAMES, Scale, Solution, heaviest, shortcut_lines, solve
 
 # --------------------------------------------------------------------------
 # Figuren
@@ -145,9 +145,12 @@ class Round:
         return lines
 
     def hints(self) -> list[list[str]]:
-        """Alle Loesungsschritte, jeder als Liste von Zeilen."""
+        """Alle Tipps, jeder als Liste von Zeilen: zuerst die Abkuerzung
+        (falls es eine gibt), dann die Loesungsschritte."""
 
-        return [step.lines() for step in self.solution.steps]
+        solution = self.solution
+        steps = [step.lines() for step in solution.steps]
+        return ([shortcut_lines(solution.shortcut)] if solution.shortcut is not None else []) + steps
 
 
 def round_from_scales(

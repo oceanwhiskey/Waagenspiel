@@ -109,6 +109,18 @@
       ok(!/\b\d*[abcd]\b/.test(text), text);
     });
 
+    await test("Abkuerzung ist der erste Tipp, mit dem Namen der Antwort", () => {
+      const withShortcut = Object.values(data.levels).flat().filter((p) => p.k);
+      ok(withShortcut.length > 0, "keine Raetsel mit Abkuerzung");
+      ok(data.levels["1"].includes(withShortcut[0]) && withShortcut.every((p) => data.levels["1"].includes(p)),
+        "Abkuerzung ausserhalb von Stufe 1");
+      const ch = pickCharacters(seededRandom(4));
+      const round = makeRound(withShortcut[0], 1, seededRandom(6));
+      eq(round.hints.length, round.steps.length + 1);
+      const text = round.hints[0].map((line) => explain(line, round, ch)).join(" ");
+      ok(text.includes(`also ist es ${ch[round.answer].name}.`), text);
+    });
+
     await test("Waagennummern folgen dem Mischen", () => {
       const round = makeRound({ s: ["b < a", "c < a", "d < a"], steps: [] }, 1, seededRandom(2));
       const ch = pickCharacters(seededRandom(1));

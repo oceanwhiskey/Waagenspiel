@@ -36,7 +36,7 @@ Spiellogik laufen unter <http://localhost:8000/tests.html>.
 | `spiel.js` | Spiellogik ohne Oberfläche: Runden, Partie, Punkte, Stufen, Bestenliste |
 | `figuren.js` | SVG-Zeichnungen der Figuren und Waagen |
 | `oberflaeche.js` | Bildschirme, Eingaben, Animationen; bekommt die Partie von außen |
-| `raetsel.json` | 1 525 Rätsel mit Lösungsschritten, erzeugt mit `python webversion.py` |
+| `raetsel.json` | 1 600 Rätsel (400 je Stufe) mit Lösungsschritten, erzeugt mit `python webversion.py` |
 | `spiel.css` | Aussehen |
 | `sw.js`, `manifest.webmanifest`, `icon*` | Installierbar und offline spielbar; der Service Worker speichert nur die Spieldateien |
 

@@ -346,6 +346,24 @@ Die **Stufe** eines Rätsels ist:
 Stufe 4 kann es nur bei drei Waagen geben. Rätsel mit einem Gegenstand pro
 Seite sind nach Satz 3 immer Stufe 1 oder 2.
 
+**Abkürzung.** Liegt eine Figur $x$ nur auf schwereren Seiten geneigter
+Waagen, also nie auf einer leichteren Seite und nie im Gleichgewicht, dann ist
+$x$ die Schwerste. Solche Rätsel zählen deshalb immer als **Stufe 1**, egal wie
+schwer der Beweis der einzelnen Vergleiche wäre.
+
+*Begründung.* Ausgehend von einer Lösung kann man $w_x$ beliebig vergrößern:
+Die Waagen mit $x$ neigen sich dabei nur stärker zur richtigen Seite, und die
+übrigen Waagen merken nichts. Es gibt also eine Lösung, in der $x$ am
+schwersten ist. Der eindeutig Schwerste ist in allen Lösungen derselbe
+(Satz 1), also ist es $x$.
+
+Dieser Schluss beweist nicht, dass jede andere Figur leichter ist. Er nutzt die
+Zusage des Spiels, dass es genau eine Antwort gibt. Dahinter steht ein
+allgemeinerer Gedanke: Unter dieser Zusage genügt es, *irgendwelche* passenden
+Gewichte zu finden. Die schwerste Figur darin ist die Antwort. Die Abkürzung
+ist der Fall, in dem man solche Gewichte sofort sieht. Im Spiel erscheint sie
+als erster Tipp; `free_heaviest` erkennt sie.
+
 Beispiel für Stufe 4:
 
 $$
@@ -379,11 +397,15 @@ Rätsel. Ohne vervielfachte Waagen wie $2c < 2a$ sind es 115 775.
 
 | Stufe | 2 Waagen | 3 Waagen | zusammen | davon ohne Vielfache |
 |---|---:|---:|---:|---:|
-| 1 ablesen | 69 | 429 | 498 | 325 |
-| 2 Kette | 420 | 54 120 | 54 540 | 35 968 |
-| 3 kombinieren | 180 | 73 012 | 73 192 | 62 065 |
-| 4 auflösen | – | 19 232 | 19 232 | 17 417 |
+| 1 ablesen | 300 | 37 704 | 38 004 | 25 991 |
+| 2 Kette | 254 | 38 678 | 38 932 | 26 897 |
+| 3 kombinieren | 115 | 55 693 | 55 808 | 49 189 |
+| 4 auflösen | – | 14 718 | 14 718 | 13 698 |
 | **zusammen** | **669** | **146 793** | **147 462** | **115 775** |
+
+Stufe 1 enthält dabei 37 506 Rätsel, die nur dank der Abkürzung aus 8.2 so
+leicht sind. Ohne die Abkürzung wären es 498 Rätsel auf Stufe 1, 54 540 auf
+Stufe 2, 73 192 auf Stufe 3 und 19 232 auf Stufe 4.
 
 `python katalog.py` zählt alle auf und schreibt sie mit ihrer Stufe nach
 `data/katalog.json.gz`. Das dauert auf vier Kernen etwa drei Minuten; die Datei ist 450 KB groß.

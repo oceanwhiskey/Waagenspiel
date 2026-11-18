@@ -215,3 +215,17 @@ def test_broken_highscore_file_is_ignored(tmp_path) -> None:
     path = tmp_path / "beste.json"
     path.write_text("kaputt", encoding="utf-8")
     assert Highscores(path).get("x") == 0
+
+
+def test_first_hint_is_the_shortcut_when_there_is_one() -> None:
+    characters = pick_characters(random.Random(2))
+    current = round_from_scales([Scale.parse(t) for t in ("d < c", "c < b", "b < a")], 1, random.Random(4))
+    first = [explain_with_names(line, characters) for line in current.hints()[0]]
+    assert "nur auf schwereren Seiten" in first[0]
+    assert first[-1].endswith(f"{characters[current.answer].name}.")
+    assert len(current.hints()) == 1 + len(current.solution.steps)
+
+
+def test_no_shortcut_hint_when_a_balance_blocks_it() -> None:
+    current = round_from_scales([Scale.parse(t) for t in ("d < c", "c < b", "a = 2b")], 2, random.Random(4))
+    assert len(current.hints()) == len(current.solution.steps)
