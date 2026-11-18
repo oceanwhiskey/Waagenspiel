@@ -115,9 +115,13 @@ h2 { font-size: 1rem; margin: 12px 0 6px; }
   border-radius: 16px;
   font-weight: 700;
 }
-#stand { flex: 1; white-space: nowrap; }
-.points { color: var(--brass-dark); font-weight: 800; }
-.clock { min-width: 3.4em; text-align: right; font-variant-numeric: tabular-nums; }
+#stand { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.points { color: var(--brass-dark); font-weight: 800; white-space: nowrap; }
+.clock { min-width: 3.6em; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 420px) {
+  .bar { gap: 7px; padding: 7px 10px; font-size: 0.95rem; }
+  .icon-btn { padding: 2px; }
+}
 .clock.knapp { color: var(--bad); }
 .icon-btn { background: none; font-size: 1.1rem; color: var(--soft); padding: 2px 6px; }
 .small { padding: 6px 14px; border-radius: 12px; font-weight: 800; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.2); }
@@ -139,6 +143,27 @@ h2 { font-size: 1rem; margin: 12px 0 6px; }
 
 .penalty { text-align: center; color: var(--soft); font-size: 0.85rem; margin: -4px 0 6px; min-height: 1.2em; font-variant-numeric: tabular-nums; }
 .penalty b { color: var(--bad); }
+.penalty b.plus { color: var(--good); }
+
+/* Serienfaktor: waechst sichtbar mit jeder Richtigen in Folge */
+.factor {
+  font-weight: 900;
+  font-size: 1rem;
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: #6b4e00;
+  background: #fff3c4;
+  border: 2px solid #f3d58a;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.factor[data-stufe="0"] { color: var(--soft); background: #f1f4f7; border-color: var(--line); }
+.factor[data-stufe="3"], .factor[data-stufe="4"], .factor[data-stufe="5"] { background: #ffd23f; border-color: #e0a526; color: #5a3d00; }
+.factor[data-stufe="6"], .factor[data-stufe="7"] { background: #ff8c42; border-color: #d4631b; color: white; }
+.factor[data-stufe="8"] { background: #ef476f; border-color: #b8284b; color: white; box-shadow: 0 0 0 3px #ef476f33; }
+.factor.waechst { animation: factor-up 0.45s ease-out; }
+.factor.faellt { animation: shake 0.35s; }
+@keyframes factor-up { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
 .float.minus { color: var(--bad); }
 
 .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }

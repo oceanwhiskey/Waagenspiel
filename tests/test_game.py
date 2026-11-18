@@ -266,3 +266,12 @@ def test_first_hint_is_the_shortcut_when_there_is_one() -> None:
 def test_no_shortcut_hint_when_a_balance_blocks_it() -> None:
     current = round_from_scales([Scale.parse(t) for t in ("d < c", "c < b", "a = 2b")], 2, random.Random(4))
     assert len(current.hints()) == len(current.solution.steps)
+
+
+def test_next_hit_shows_the_growing_factor() -> None:
+    session = GameSession(ListSource(), FixedDifficulty(4), clock=FakeClock())
+    current = session.start()
+    assert (session.next_factor(), session.next_points()) == (1.0, 40)
+    session.answer(current.answer)
+    session.next_round()
+    assert (session.next_factor(), session.next_points()) == (1.25, 50)

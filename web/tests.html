@@ -198,6 +198,16 @@
       eq(s.result(), { rounds: 1, correct: 0, wrong: 1, points: -10, bestStreak: 0 });
     });
 
+    await test("Naechster Treffer zeigt den wachsenden Faktor", () => {
+      clock.now = 100;
+      const s = new GameSession({ source: fixedSource, difficulty: new FixedDifficulty(4), clock, characters: [] });
+      const r = s.start();
+      eq([s.nextFactor(), s.nextPoints()], [1, 40]);
+      s.answer(r.answer);
+      s.nextRound();
+      eq([s.nextFactor(), s.nextPoints()], [1.25, 50]);
+    });
+
     await test("Ueben zaehlt keine Punkte", () => {
       clock.now = 100;
       const s = new GameSession({ source: fixedSource, difficulty: new FixedDifficulty(4), timeLimit: null, clock, characters: [] });

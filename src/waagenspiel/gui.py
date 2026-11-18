@@ -384,7 +384,8 @@ class GameWindow:
         c.itemconfigure(self.status_text, text=f"Runde {s.rounds + 1}    ✔ {s.correct}    ✘ {s.wrong}")
         c.itemconfigure(self.points_text, text="" if s.is_practice else f"★ {s.points}")
         streak = f"    Serie {s.streak}" if s.streak >= 2 else ""
-        c.itemconfigure(self.level_text, text=f"Stufe: {LEVEL_TITLES[s.difficulty.level]}{streak}")
+        factor = "" if s.is_practice else f"    Faktor ×{f'{s.next_factor():g}'.replace('.', ',')}"
+        c.itemconfigure(self.level_text, text=f"Stufe: {LEVEL_TITLES[s.difficulty.level]}{streak}{factor}")
 
     def _tick(self) -> None:
         s = self.session
@@ -401,8 +402,8 @@ class GameWindow:
             self.accepting = False
             return
         if self.accepting:
-            c.itemconfigure(self.message, text=f"Welche Figur ist am schwersten?   (Fehler kostet −{s.current_penalty()})",
-                            fill=SOFT_INK)
+            c.itemconfigure(self.message, text=f"Welche Figur ist am schwersten?   "
+                            f"(Richtig +{s.next_points()} · Fehler −{s.current_penalty()})", fill=SOFT_INK)
         self.later(100, self._tick)
 
     def _show_round(self) -> None:

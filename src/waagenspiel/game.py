@@ -422,6 +422,18 @@ class GameSession:
         left = self.time_left()
         return left is not None and left <= 0
 
+    def next_factor(self) -> float:
+        """Serienfaktor, mit dem der naechste Treffer zaehlt."""
+
+        return streak_factor(self.streak + 1)
+
+    def next_points(self) -> int:
+        """Was ein Treffer jetzt bringen wuerde (0 beim Ueben)."""
+
+        if self.current is None or self.is_practice:
+            return 0
+        return points_for(self.current.level, self.streak + 1)
+
     def answer(self, choice: int) -> Feedback:
         """Wertet eine Antwort zur aktuellen Runde aus."""
 

@@ -282,6 +282,17 @@ export class GameSession {
     return penaltyFor(this.current.level, this.thinkingTime());
   }
 
+  /** Serienfaktor, mit dem der naechste Treffer zaehlt. */
+  nextFactor() {
+    return streakFactor(this.streak + 1);
+  }
+
+  /** Was ein Treffer jetzt bringen wuerde (0 beim Ueben). */
+  nextPoints() {
+    if (!this.current || this.isPractice) return 0;
+    return pointsFor(this.current.level, this.streak + 1);
+  }
+
   timeLeft() {
     if (this.isPractice) return null;
     if (this.startedAt == null) return this.timeLimit;

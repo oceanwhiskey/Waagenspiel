@@ -318,6 +318,9 @@ class App {
     $("uhr").hidden = practice;
     $("zeitbalken").hidden = practice;
     this.drawCards();
+    delete $("faktor").dataset.gezeigt;
+    delete $("faktor").dataset.wert;
+    $("faktor").textContent = "";
     this.token = null;
     if (!practice) {
       const key = Highscores.key(this.difficulty, this.timeLimit);
@@ -335,10 +338,35 @@ class App {
 
   updateHeader() {
     const s = this.session;
-    $("stand").textContent = `Runde ${s.rounds + 1}  ✔ ${s.correct}  ✘ ${s.wrong}`;
+    $("stand").textContent = `✔ ${s.correct}  ✘ ${s.wrong}`;
+    $("stand").title = `Runde ${s.rounds + 1}`;
     $("punkte").textContent = s.isPractice ? "" : `★ ${s.points}`;
     const streak = s.streak >= 2 ? ` · Serie ${s.streak}` : "";
     $("stufe").textContent = `Stufe: ${LEVEL_TITLES[s.difficulty.level]}${streak}`;
+    this.updateFactor();
+  }
+
+  /** Serienfaktor fuer den naechsten Treffer, gut sichtbar neben den Punkten. */
+  updateFactor() {
+    const s = this.session;
+    const badge = $("faktor");
+    if (!s || s.isPractice) {
+      badge.hidden = true;
+      return;
+    }
+    const factor = s.nextFactor();
+    const text = `×${String(factor).replace(".", ",")}`;
+    badge.hidden = false;
+    badge.dataset.stufe = String(Math.round((factor - 1) * 4)); // 0 .. 8 fuer die Farbe
+    if (badge.textContent !== text) {
+      const grew = factor > (Number(badge.dataset.wert) || 1);
+      badge.textContent = text;
+      badge.dataset.wert = String(factor);
+      badge.classList.remove("waechst", "faellt");
+      void badge.offsetWidth; // Animation neu starten
+      if (badge.dataset.gezeigt) badge.classList.add(grew ? "waechst" : "faellt");
+    }
+    badge.dataset.gezeigt = "1";
   }
 
   tick() {
@@ -410,7 +438,7 @@ class App {
       box.textContent = "";
       return;
     }
-    box.innerHTML = `Ein Fehler kostet gerade <b>−${s.currentPenalty()}</b>`;
+    box.innerHTML = `Richtig bringt <b class="plus">+${s.nextPoints()}</b> · Fehler kostet <b>−${s.currentPenalty()}</b>`;
   }
 
   choose(choice) {
@@ -581,7 +609,7 @@ class App {
 // Muss zu <meta name="waagenspiel-version"> in index.html passen; bei jedem Update
 // beider Dateien erhoehen. Passt es nicht (alte Seite aus dem Browser-Cache, neues
 // Skript), wird die Seite einmal neu geladen.
-const VERSION = "6";
+const VERSION = "7";
 
 function pageIsCurrent() {
   const meta = document.querySelector('meta[name="waagenspiel-version"]');
