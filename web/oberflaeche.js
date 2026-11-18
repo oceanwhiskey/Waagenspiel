@@ -13,7 +13,7 @@ import {
   streakFactor,
 } from "./spiel.js";
 import { ScaleDrawing, animateTilt, character, characterIcon, inlineFigure } from "./figuren.js";
-import { GlobalBoard, beatsRecord, validName } from "./bestenliste.js";
+import { GlobalBoard, PlayerAccount, validName } from "./bestenliste.js";
 
 const $ = (id) => document.getElementById(id);
 const SPOTS = [[118, 40], [242, 200], [118, 360]]; // oben links, Mitte rechts, unten links
@@ -68,10 +68,11 @@ class Sound {
 // --- Fenster ----------------------------------------------------------------------
 
 class App {
-  constructor({ makeSession, highscores, sound, board }) {
-    Object.assign(this, { makeSession, highscores, sound, board });
-    this.records = null; // globale Rekorde, sobald geladen
+  constructor({ makeSession, highscores, sound, board, account }) {
+    Object.assign(this, { makeSession, highscores, sound, board, account });
+    this.lists = null; // Top 10 je Kategorie, sobald geladen
     this.boardTime = 60;
+    this.boardLevel = "Steigend";
     const savedLevel = store.getItem("waagenspiel.stufe");
     this.difficulty = savedLevel in DIFFICULTIES ? savedLevel : "Steigend";
     const savedTime = store.getItem("waagenspiel.zeit");
@@ -99,7 +100,7 @@ class App {
   }
 
   show(id) {
-    for (const s of ["start", "spiel", "ende", "bestenliste"]) $(s).hidden = s !== id;
+    for (const s of ["start", "spiel", "ende", "bestenliste", "konto"]) $(s).hidden = s !== id;
     $("blatt").hidden = true;
   }
 
@@ -118,14 +119,25 @@ class App {
     $("ton").onclick = () => { this.sound.toggle(); this.updateSoundLabel(); };
     $("zur-bestenliste").onclick = () => this.showBoard();
     $("liste-zurueck").onclick = () => this.showStart();
-    $("welt-form").onsubmit = (e) => { e.preventDefault(); this.submitRecord(); };
+    $("zum-konto").onclick = () => this.showAccount("start");
+    $("welt-name").onclick = () => this.showAccount("ende");
+    $("konto-zurueck").onclick = () => this.leaveAccount();
+    $("name-form").onsubmit = (e) => { e.preventDefault(); this.createName(); };
+    $("code-form").onsubmit = (e) => { e.preventDefault(); this.redeemCode(); };
+    $("umbenennen-form").onsubmit = (e) => { e.preventDefault(); this.renameName(); };
+    $("code-zeigen").onclick = () => this.showTransferCode();
+    $("abmelden").onclick = () => this.logoutHere();
+    $("name-loeschen").onclick = () => this.deleteName();
     document.addEventListener("keydown", (e) => this.onKey(e));
   }
 
   onKey(e) {
     if (e.target instanceof HTMLInputElement) return; // Namensfeld: Tasten gehoeren dem Feld
     const key = e.key.toLowerCase();
-    if (key === "escape") return $("bestenliste").hidden ? this.leave() : this.showStart();
+    if (key === "escape") {
+      if (!$("konto").hidden) return this.leaveAccount();
+      return $("bestenliste").hidden ? this.leave() : this.showStart();
+    }
     if (!$("start").hidden && key === "enter") return this.startGame();
     if (!$("ende").hidden && key === "enter") return this.startGame();
     if (["1", "2", "3", "4"].includes(key) && this.accepting) return this.choose(Number(key) - 1);
@@ -153,7 +165,8 @@ class App {
     this.updateRecord();
     this.updateSoundLabel();
     this.drawLogo();
-    this.loadRecords().then(() => this.updateRecord());
+    this.updateAccountLink();
+    this.loadLists().then(() => this.updateRecord());
   }
 
   chips(id, values, label, selected, onSelect) {
@@ -179,107 +192,258 @@ class App {
     $("rekord").textContent = this.timeLimit == null
       ? "Üben: ohne Uhr, mit Tipps und Erklärungen"
       : best ? `Dein Rekord: ${best} Punkte` : "Noch kein eigener Rekord – stell den ersten auf!";
-    const world = this.timeLimit == null ? null : this.records?.[Highscores.key(this.difficulty, this.timeLimit)];
-    $("weltrekord").textContent = this.timeLimit == null || !this.records ? ""
-      : world ? `Bestenliste: ${world.name} mit ${world.punkte} Punkten` : "Bestenliste: noch frei – sei die oder der Erste!";
+    const list = this.timeLimit == null ? null : this.lists?.[Highscores.key(this.difficulty, this.timeLimit)];
+    $("weltrekord").textContent = this.timeLimit == null || !this.lists ? ""
+      : list?.length ? `Bestenliste: 1. ${list[0].name} mit ${list[0].punkte} Punkten` : "Bestenliste: noch frei – sei die oder der Erste!";
   }
 
-  // --- Globale Bestenliste ------------------------------------------------------------
+  updateAccountLink() {
+    const name = this.account.name;
+    $("zum-konto").textContent = name ? `Spielername: ${name}` : "Spielername wählen";
+  }
 
-  async loadRecords() {
+  // --- Bestenliste ---------------------------------------------------------------------
+
+  async loadLists() {
     try {
-      this.records = await this.board.records();
+      this.lists = await this.board.lists();
     } catch {
-      this.records = null; // ohne Netz geht es eben ohne Bestenliste
+      this.lists = null; // ohne Netz geht es eben ohne Bestenliste
     }
-    return this.records;
+    return this.lists;
   }
 
   showBoard() {
     this.clearTimers();
     this.session = null;
     this.show("bestenliste");
+    this.chips("liste-stufe", Object.keys(DIFFICULTIES), (d) => d, this.boardLevel, (d) => {
+      this.boardLevel = d;
+      this.renderBoard();
+    });
     this.chips("liste-zeit", TIMES.filter(Boolean), (t) => `${t} s`, this.boardTime, (t) => {
       this.boardTime = t;
       this.renderBoard();
     });
     $("liste-status").textContent = "wird geladen …";
     this.renderBoard();
-    this.loadRecords().then(() => this.renderBoard());
+    this.loadLists().then(() => this.renderBoard());
   }
 
   renderBoard() {
-    const table = $("liste");
-    $("liste-status").textContent = this.records ? "" : "Die Bestenliste ist gerade nicht erreichbar.";
-    table.replaceChildren(...Object.keys(DIFFICULTIES).map((difficulty) => {
-      const row = document.createElement("tr");
-      const name = document.createElement("td");
-      name.textContent = difficulty;
-      const cell = document.createElement("td");
-      const record = this.records?.[Highscores.key(difficulty, this.boardTime)];
-      if (record) {
-        const who = document.createElement("span");
-        who.className = "who";
-        who.textContent = record.name;
-        const when = document.createElement("span");
-        when.className = "when";
-        when.textContent = new Date(record.datum).toLocaleDateString("de-DE");
-        cell.append(`${record.punkte}`, who, when);
-      } else {
-        const empty = document.createElement("span");
-        empty.className = "empty";
-        empty.textContent = this.records ? "noch frei" : "–";
-        cell.append(empty);
-      }
-      row.append(name, cell);
-      return row;
-    }));
+    const list = this.lists?.[Highscores.key(this.boardLevel, this.boardTime)] || [];
+    $("liste-status").textContent = !this.lists ? "Die Bestenliste ist gerade nicht erreichbar."
+      : list.length ? "" : "Hier hat noch niemand gespielt.";
+    $("liste").replaceChildren(...this.boardRows(list));
   }
 
+  boardRows(list) {
+    const me = this.account.name?.toLocaleLowerCase("de-DE");
+    return list.map((entry, i) => {
+      const row = document.createElement("li");
+      if (entry.name.toLocaleLowerCase("de-DE") === me) row.className = "mine";
+      const rank = document.createElement("span");
+      rank.className = "rank";
+      rank.textContent = `${i + 1}.`;
+      const who = document.createElement("span");
+      who.className = "who";
+      who.textContent = entry.name;
+      const when = document.createElement("span");
+      when.className = "when";
+      when.textContent = new Date(entry.datum).toLocaleDateString("de-DE");
+      const points = document.createElement("span");
+      points.className = "pts";
+      points.textContent = entry.punkte;
+      row.append(rank, who, when, points);
+      return row;
+    });
+  }
+
+  /** Nach einer vollen Partie auf Zeit: mit Namen eintragen, sonst Namen anbieten. */
   async offerRecord(key, points, token) {
     const box = $("welt");
-    $("welt-form").hidden = true;
-    $("welt-fehler").textContent = "";
-    if (!points || !token) return;
-    const records = await this.loadRecords();
-    if (!records || $("ende").hidden) return;
-    const record = records[key];
-    box.hidden = false;
-    if (beatsRecord(points, record)) {
-      $("welt-text").textContent = record
-        ? `Neuer Rekord in der Bestenliste! Bisher: ${record.name} mit ${record.punkte}.`
-        : "Du bist die oder der Erste in dieser Kategorie!";
-      $("welt-form").hidden = false;
+    $("welt-name").hidden = true;
+    box.hidden = true;
+    if (!token) return;
+    if (points < 1) {
+      box.hidden = false;
+      $("welt-text").textContent = "In die Bestenliste kommen nur Partien mit mindestens 1 Punkt.";
+      return;
+    }
+    if (!this.account.key) {
       this.pending = { key, points, token };
-      $("welt-name").value = store.getItem("waagenspiel.name") || "";
-      $("welt-name").focus();
-    } else {
-      $("welt-text").textContent = `Rekord in der Bestenliste: ${record.name} mit ${record.punkte} Punkten.`;
+      box.hidden = false;
+      $("welt-text").textContent = "Mit einem Spielernamen kommt dieses Ergebnis in die Bestenliste.";
+      $("welt-name").hidden = false;
+      return;
+    }
+    await this.submitResult({ key, points, token });
+  }
+
+  async submitResult(pending) {
+    const box = $("welt");
+    box.hidden = false;
+    $("welt-name").hidden = true;
+    $("welt-text").textContent = "Wird eingetragen …";
+    try {
+      const result = await this.board.submit(pending.token, pending.key, pending.points);
+      this.pending = null;
+      if (this.lists) this.lists[pending.key] = result.liste;
+      const [level, time] = pending.key.split("/");
+      const where = `${level}, ${time.replace("s", " s")}`;
+      if (result.platz <= 10) {
+        $("welt-text").textContent = result.verbessert
+          ? `Platz ${result.platz} in der Bestenliste (${where})!`
+          : `Dein bestes Ergebnis (${result.bestes}) steht weiter auf Platz ${result.platz} (${where}).`;
+        if (result.verbessert && result.platz <= 3) this.confetti();
+      } else {
+        const last = result.liste.at(-1);
+        $("welt-text").textContent = `Für die Top 10 hat es diesmal nicht gereicht (Platz 10: ${last.punkte}).`;
+      }
+    } catch (error) {
+      $("welt-text").textContent = error.message;
+      if (error.status === 401) {
+        this.pending = pending;
+        $("welt-name").hidden = false;
+        this.updateAccountLink();
+      }
     }
   }
 
-  async submitRecord() {
-    const pending = this.pending;
-    if (!pending) return;
-    const name = validName($("welt-name").value);
-    if (!name) {
-      $("welt-fehler").textContent = "Bitte 1 bis 20 Zeichen: Buchstaben, Ziffern, Leerzeichen, . _ - ! ?";
+  // --- Spielername ------------------------------------------------------------------------
+
+  showAccount(back) {
+    this.clearTimers();
+    if (back !== "ende") this.session = null;
+    this.accountBack = back;
+    this.show("konto");
+    $("konto-status").textContent = "";
+    $("code-anzeige").hidden = true;
+    this.renderAccount();
+  }
+
+  leaveAccount() {
+    if (this.accountBack === "ende") {
+      this.show("ende");
+      if (this.pending && this.account.key) this.submitResult(this.pending);
+    } else {
+      this.showStart();
+    }
+  }
+
+  async renderAccount() {
+    const named = !!this.account.key;
+    $("konto-neu").hidden = named;
+    $("konto-da").hidden = !named;
+    if (!named) {
+      $("name-feld").value = "";
       return;
     }
-    $("welt-senden").disabled = true;
+    $("konto-name").textContent = this.account.name || "…";
+    $("umbenennen-feld").value = this.account.name || "";
     try {
-      this.records = await this.board.submit(pending.token, pending.key, pending.points, name);
-      store.setItem("waagenspiel.name", name);
-      this.pending = null;
-      $("welt-form").hidden = true;
-      $("welt-text").textContent = `Eingetragen: ${name} mit ${pending.points} Punkten. Glückwunsch!`;
-      this.confetti();
+      const me = await this.account.me();
+      $("konto-name").textContent = me.name;
+      $("geraete").replaceChildren(...me.geraete.map((device) => {
+        const li = document.createElement("li");
+        const label = document.createElement("span");
+        const since = new Date(device.erstellt).toLocaleDateString("de-DE");
+        label.textContent = device.dieses ? `Dieses Gerät (seit ${since})` : `Gerät seit ${since}`;
+        li.append(label);
+        if (!device.dieses) {
+          const off = document.createElement("button");
+          off.className = "link";
+          off.type = "button";
+          off.textContent = "abmelden";
+          off.onclick = async () => {
+            await this.guard(() => this.account.logoutDevice(device.id));
+            this.renderAccount();
+          };
+          li.append(off);
+        }
+        return li;
+      }));
     } catch (error) {
-      $("welt-fehler").textContent = error.message;
-      if (error.records) this.records = error.records;
-    } finally {
-      $("welt-senden").disabled = false;
+      $("konto-status").textContent = error.message;
+      if (error.status === 401) {
+        this.updateAccountLink();
+        this.renderAccount();
+      }
     }
+  }
+
+  /** Fuehrt eine Namens-Aktion aus und zeigt Fehler an. */
+  async guard(action) {
+    $("konto-status").textContent = "";
+    try {
+      return await action();
+    } catch (error) {
+      $("konto-status").textContent = error.message;
+      return undefined;
+    }
+  }
+
+  async createName() {
+    const name = validName($("name-feld").value);
+    if (!name) {
+      $("konto-status").textContent = "Bitte 1 bis 20 Zeichen: Buchstaben, Ziffern, Leerzeichen, . _ - ! ?";
+      return;
+    }
+    if (await this.guard(() => this.account.create(name))) this.afterNamed();
+  }
+
+  async redeemCode() {
+    if (await this.guard(() => this.account.redeem($("code-feld").value))) this.afterNamed();
+  }
+
+  afterNamed() {
+    this.updateAccountLink();
+    if (this.accountBack === "ende") this.leaveAccount();
+    else this.renderAccount();
+  }
+
+  async renameName() {
+    const name = validName($("umbenennen-feld").value);
+    if (!name) {
+      $("konto-status").textContent = "Bitte 1 bis 20 Zeichen: Buchstaben, Ziffern, Leerzeichen, . _ - ! ?";
+      return;
+    }
+    if (await this.guard(() => this.account.rename(name))) {
+      this.updateAccountLink();
+      await this.renderAccount();
+      $("konto-status").textContent = "Name geändert.";
+    }
+  }
+
+  async showTransferCode() {
+    const data = await this.guard(() => this.account.transferCode());
+    if (!data) return;
+    const box = $("code-anzeige");
+    const code = document.createElement("strong");
+    code.textContent = data.code;
+    box.replaceChildren(code, ` – auf dem anderen Gerät unter „Spielername“ eingeben. `
+      + `Gilt ${Math.round(data.gueltig_s / 60)} Minuten und nur einmal.`);
+    box.hidden = false;
+  }
+
+  async logoutHere() {
+    const ok = confirm("Auf diesem Gerät abmelden? Ist es dein letztes Gerät mit diesem Namen, "
+      + "wird der Name samt Ergebnissen gelöscht. Übertrage ihn vorher, wenn du ihn behalten willst.");
+    if (!ok) return;
+    const deleted = await this.guard(() => this.account.logout());
+    if (deleted === undefined) return;
+    this.updateAccountLink();
+    await this.renderAccount();
+    $("konto-status").textContent = deleted ? "Abgemeldet. Der Name ist gelöscht." : "Auf diesem Gerät abgemeldet.";
+  }
+
+  async deleteName() {
+    if (!confirm("Namen und alle Ergebnisse auf allen Geräten löschen? Das lässt sich nicht rückgängig machen.")) return;
+    const done = await this.guard(async () => { await this.account.remove(); return true; });
+    if (!done) return;
+    this.updateAccountLink();
+    await this.renderAccount();
+    $("konto-status").textContent = "Name und Ergebnisse sind gelöscht.";
   }
 
   updateSoundLabel() {
@@ -609,7 +773,7 @@ class App {
 // Muss zu <meta name="waagenspiel-version"> in index.html passen; bei jedem Update
 // beider Dateien erhoehen. Passt es nicht (alte Seite aus dem Browser-Cache, neues
 // Skript), wird die Seite einmal neu geladen.
-const VERSION = "7";
+const VERSION = "8";
 
 function pageIsCurrent() {
   const meta = document.querySelector('meta[name="waagenspiel-version"]');
@@ -639,6 +803,8 @@ async function main() {
     return;
   }
   const source = new RoundSource(data.levels);
+  const account = new PlayerAccount({ storage: store });
+  const board = new GlobalBoard({ account });
   let app;
   try {
     app = new App({
@@ -646,7 +812,8 @@ async function main() {
         new GameSession({ source, difficulty: DIFFICULTIES[difficulty](), timeLimit, characters }),
       highscores: new Highscores(store),
       sound: new Sound(store),
-      board: new GlobalBoard(),
+      board,
+      account,
     });
   } catch (error) {
     $("laden").textContent = "Das Spiel wurde gerade aktualisiert. Bitte die Seite neu laden.";

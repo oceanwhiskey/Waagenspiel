@@ -18,7 +18,7 @@
       panItems, panPositions, parseScale, pickCharacters, pointsFor, scaleView, seededRandom, stepsFor,
       penaltyFor, thinkSeconds, SETTLE_SECONDS,
     } from "./spiel.js";
-    import { GlobalBoard, beatsRecord, validName } from "./bestenliste.js";
+    import { GlobalBoard, PlayerAccount, validName } from "./bestenliste.js";
 
     const results = [];
     const test = async (name, fn) => {
@@ -123,27 +123,38 @@
       ok(text.includes(`also ist es ${ch[round.answer].name}.`), text);
     });
 
-    await test("Bestenliste: nur ein echter neuer Rekord zaehlt, Namen werden geprueft", () => {
-      ok(beatsRecord(10, undefined) && beatsRecord(11, { punkte: 10 }));
-      ok(!beatsRecord(10, { punkte: 10 }) && !beatsRecord(0, undefined));
+    await test("Bestenliste: Namen werden wie auf dem Server geprueft", () => {
       eq(validName("  Jörg   Ä. "), "Jörg Ä.");
       eq(validName("<b>x</b>"), null);
       eq(validName(""), null);
       eq(validName("x".repeat(21)), null);
     });
 
+    await test("Spielername: Schluessel geht im Kopf mit, 401 vergisst ihn", async () => {
+      const store = new Map();
+      const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+      const seen = [];
+      const fake = async (url, options) => {
+        seen.push(options.headers["X-Waagenspiel-Schluessel"] || null);
+        const aktion = new URLSearchParams(options.body).get("aktion");
+        if (aktion === "anlegen") return { status: 200, json: async () => ({ ok: true, name: "Jörg", schluessel: "k".repeat(43) }) };
+        return { status: 401, json: async () => ({ ok: false, fehler: "Dieses Geraet hat keinen Spielernamen (mehr)." }) };
+      };
+      const account = new PlayerAccount({ storage, fetchFn: fake });
+      eq(await account.create("Jörg"), "Jörg");
+      eq([account.name, account.key], ["Jörg", "k".repeat(43)]);
+      try { await account.me(); ok(false, "kein Fehler"); } catch (e) { eq(e.status, 401); }
+      eq(seen, [null, "k".repeat(43)]);
+      eq([account.name, account.key], [null, null]);
+    });
+
     await test("Bestenliste: Serverfehler kommen als Meldung an", async () => {
-      const fake = async () => ({ json: async () => ({ ok: false, fehler: "Kein neuer Rekord", rekorde: { "Mittel/30s": { punkte: 5 } } }) });
-      const board = new GlobalBoard("x", fake);
-      try {
-        await board.submit("t", "Mittel/30s", 3, "A");
-        ok(false, "kein Fehler");
-      } catch (e) {
-        eq(e.message, "Kein neuer Rekord");
-        eq(e.records["Mittel/30s"].punkte, 5);
-      }
-      const offline = new GlobalBoard("x", async () => ({ json: async () => { throw new Error("kein JSON"); } }));
-      try { await offline.records(); ok(false); } catch (e) { ok(e.message.includes("nicht erreichbar")); }
+      const account = new PlayerAccount({ storage: null });
+      const fake = async () => ({ status: 409, json: async () => ({ ok: false, fehler: "Diese Partie ist schon eingetragen" }) });
+      const board = new GlobalBoard({ account, fetchFn: fake });
+      try { await board.submit("t", "Mittel/30s", 3); ok(false, "kein Fehler"); } catch (e) { eq(e.message, "Diese Partie ist schon eingetragen"); }
+      const offline = new GlobalBoard({ account, fetchFn: async () => ({ json: async () => { throw new Error("kein JSON"); } }) });
+      try { await offline.lists(); ok(false); } catch (e) { ok(e.message.includes("nicht erreichbar")); }
     });
 
     await test("Erklaerzeile zerfaellt in Text und Figuren der Runde", () => {

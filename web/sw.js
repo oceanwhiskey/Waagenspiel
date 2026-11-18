@@ -1,10 +1,10 @@
 // Offline-Speicher: zuerst das Netz (immer die neueste Version), sonst der Speicher.
 // Nur die Dateien des Spiels selbst; alles andere auf derselben Seite (z. B. Noten,
 // Musik) geht unberuehrt am Service Worker vorbei.
-const CACHE = "waagenspiel-v7";
+const CACHE = "waagenspiel-v8";
 const FILES = [
   "./", "index.html", "spiel.css", "spiel.js", "figuren.js", "oberflaeche.js", "bestenliste.js", "raetsel.json",
-  "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png", "icon-180.png",
+  "datenschutz.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png", "icon-180.png",
 ];
 const BASE = new URL("./", self.location).href;
 const GAME_URLS = new Set(FILES.map((file) => new URL(file, BASE).href));

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Datenschutz – Waagen-Spiel</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <style>
+    body { font: 16px/1.55 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; color: #2b2d42;
+           background: linear-gradient(#eaf6ff, #fff3df) fixed; margin: 0; }
+    main { max-width: 640px; margin: 0 auto; padding: 24px 18px 48px; }
+    h1 { font-size: 1.8rem; margin: 0 0 12px; }
+    h2 { font-size: 1.1rem; margin: 26px 0 6px; }
+    ul { padding-left: 1.2em; }
+    a { color: #3a86ff; }
+    .back { display: inline-block; margin-top: 28px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Datenschutz</h1>
+    <p>Das Waagen-Spiel kommt mit so wenig Daten wie möglich aus. Es gibt kein
+      Passwort, keine E-Mail-Adresse, keine Cookies, keine Werbung, keine
+      Statistikdienste und keine Inhalte von fremden Servern.</p>
+
+    <h2>Verantwortlich</h2>
+    <p>Betreiber dieser Seite, erreichbar unter
+      <a href="mailto:ingo@imazeki.de">ingo@imazeki.de</a>.</p>
+
+    <h2>Spielen ohne Spielernamen</h2>
+    <p>Rätsel, Einstellungen (Schwierigkeit, Zeit, Ton) und eigene Rekorde
+      bleiben nur in deinem Browser (<code>localStorage</code>). Sie werden nicht
+      übertragen. Du kannst sie jederzeit über die Browser-Einstellungen
+      löschen.</p>
+
+    <h2>Spielername und Bestenliste</h2>
+    <p>Wenn du einen Spielernamen wählst, speichert der Server:</p>
+    <ul>
+      <li>den Spielernamen, den du dir ausdenkst,</li>
+      <li>einen Fingerabdruck (SHA-256-Hash) des zufälligen Geräteschlüssels,
+        mit dem sich dein Gerät ausweist; der Schlüssel selbst liegt nur in
+        deinem Browser,</li>
+      <li>dein bestes Ergebnis je Schwierigkeit und Zeit mit Datum,</li>
+      <li>wann der Name und die Geräte angelegt und zuletzt benutzt wurden.</li>
+    </ul>
+    <p>Der Spielername und deine Ergebnisse sind in der Bestenliste für alle
+      sichtbar. Wähl deshalb bitte keinen echten vollen Namen. Zweck ist allein
+      der Betrieb der Bestenliste (Art. 6 Abs. 1 lit. b DSGVO, Nutzung der von
+      dir gewählten Funktion).</p>
+
+    <h2>Löschen</h2>
+    <p>Unter „Spielername“ kannst du deinen Namen jederzeit löschen. Dann
+      werden der Name, alle Geräteschlüssel und alle Ergebnisse sofort
+      entfernt. Meldest du das letzte Gerät mit diesem Namen ab, geschieht
+      dasselbe.</p>
+
+    <h2>Server-Protokolle</h2>
+    <p>Die Seite liegt bei einem Webhoster (Biohost). Wie bei jeder Webseite
+      protokolliert dessen Server technische Zugriffsdaten (zum Beispiel
+      IP-Adresse, Zeitpunkt, abgerufene Datei), um den Betrieb sicherzustellen.
+      Das Spiel selbst speichert keine IP-Adressen.</p>
+
+    <h2>Deine Rechte</h2>
+    <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung und
+      Einschränkung der Verarbeitung deiner Daten sowie auf Beschwerde bei einer
+      Datenschutz-Aufsichtsbehörde. Für Fragen genügt eine E-Mail an die oben
+      genannte Adresse.</p>
+
+    <a class="back" href="./">← Zurück zum Spiel</a>
+  </main>
+</body>
+</html>

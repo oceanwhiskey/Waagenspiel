@@ -1,54 +1,138 @@
-// Verbindung zur globalen Bestenliste (bestenliste.php). Keine Oberflaeche.
+// Verbindung zu spieler.php und bestenliste.php. Keine Oberflaeche.
 //
-// Je Kategorie ("Mittel/60s") gibt es einen Rekord; eintragen darf sich nur, wer
-// ihn bricht. Fuer jede Partie auf Zeit holt das Spiel beim Start eine Marke,
-// die der Server erst nach Ablauf der Spielzeit annimmt.
+// Spielername ohne Passwort und E-Mail (docs/04, Abschnitt 2): Der Server gibt
+// beim Anlegen einen zufaelligen Geraeteschluessel heraus. Er liegt nur hier im
+// Browser (storage) und geht mit jedem Aufruf im Kopf X-Waagenspiel-Schluessel mit.
 
-export class GlobalBoard {
-  constructor(url = "bestenliste.php", fetchFn = (...args) => fetch(...args)) {
-    this.url = url;
-    this.fetch = fetchFn;
+const KEY = "waagenspiel.schluessel";
+const NAME = "waagenspiel.spielername";
+
+async function request(fetchFn, url, body, key) {
+  const headers = { Accept: "application/json" };
+  if (key) headers["X-Waagenspiel-Schluessel"] = key;
+  const options = body ? { method: "POST", body: new URLSearchParams(body), headers } : { headers };
+  let response;
+  let data;
+  try {
+    response = await fetchFn(url, options);
+    data = await response.json();
+  } catch {
+    throw new Error("Der Server ist gerade nicht erreichbar.");
+  }
+  if (!data.ok) {
+    const error = new Error(data.fehler || "Unbekannter Fehler");
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+/** Spielername dieses Geraets. */
+export class PlayerAccount {
+  constructor({ url = "spieler.php", storage, fetchFn = (...a) => fetch(...a) } = {}) {
+    Object.assign(this, { url, storage, fetchFn });
   }
 
-  async request(body) {
-    const options = body
-      ? { method: "POST", body: new URLSearchParams(body), headers: { Accept: "application/json" } }
-      : { headers: { Accept: "application/json" } };
-    const response = await this.fetch(this.url, options);
-    let data;
+  get key() {
+    return this.storage?.getItem(KEY) || null;
+  }
+
+  /** Zuletzt bekannter Name (fuer die Anzeige, auch offline). */
+  get name() {
+    return this.key ? this.storage?.getItem(NAME) || null : null;
+  }
+
+  remember(name, key) {
+    if (key) this.storage?.setItem(KEY, key);
+    this.storage?.setItem(NAME, name);
+  }
+
+  forget() {
+    this.storage?.setItem(KEY, "");
+    this.storage?.setItem(NAME, "");
+  }
+
+  async call(aktion, fields = {}) {
     try {
-      data = await response.json();
-    } catch {
-      throw new Error("Die Bestenliste ist gerade nicht erreichbar.");
-    }
-    if (!data.ok) {
-      const error = new Error(data.fehler || "Unbekannter Fehler");
-      error.records = data.rekorde;
+      return await request(this.fetchFn, this.url, { aktion, ...fields }, this.key);
+    } catch (error) {
+      if (error.status === 401) this.forget(); // Name wurde woanders geloescht oder abgemeldet
       throw error;
     }
+  }
+
+  async create(name) {
+    const data = await this.call("anlegen", { name });
+    this.remember(data.name, data.schluessel);
+    return data.name;
+  }
+
+  async redeem(code) {
+    const data = await this.call("code_einloesen", { code });
+    this.remember(data.name, data.schluessel);
+    return data.name;
+  }
+
+  /** {name, erstellt, geraete: [{id, erstellt, zuletzt, dieses}]} */
+  async me() {
+    const data = await this.call("ich");
+    this.remember(data.name);
     return data;
   }
 
-  /** Alle Rekorde: {kategorie: {name, punkte, datum, verlauf: [...]}} */
-  async records() {
-    return (await this.request()).rekorde || {};
+  async rename(name) {
+    const data = await this.call("umbenennen", { name });
+    this.remember(data.name);
+    return data.name;
+  }
+
+  async transferCode() {
+    return this.call("code_erzeugen"); // {code, gueltig_s}
+  }
+
+  async logoutDevice(id) {
+    await this.call("geraet_abmelden", { id });
+  }
+
+  /** Dieses Geraet abmelden; liefert true, wenn damit der Name ganz geloescht ist. */
+  async logout() {
+    const data = await this.call("abmelden");
+    this.forget();
+    return data.name_geloescht;
+  }
+
+  async remove() {
+    await this.call("loeschen");
+    this.forget();
+  }
+}
+
+/** Bestenliste: Top 10 je Kategorie, Eintrag nur mit Spielernamen. */
+export class GlobalBoard {
+  constructor({ url = "bestenliste.php", account, fetchFn = (...a) => fetch(...a) } = {}) {
+    Object.assign(this, { url, account, fetchFn });
+  }
+
+  /** {kategorie: [{name, punkte, datum}, ...]} */
+  async lists() {
+    return (await request(this.fetchFn, this.url)).listen || {};
   }
 
   /** Marke fuer eine Partie, beim Start holen. */
   async start(category) {
-    return (await this.request({ aktion: "start", kategorie: category })).marke;
+    return (await request(this.fetchFn, this.url, { aktion: "start", kategorie: category })).marke;
   }
 
-  /** Neuen Rekord eintragen; liefert die neuen Rekorde. */
-  async submit(token, category, points, name) {
-    const data = await this.request({ aktion: "eintragen", marke: token, kategorie: category, punkte: points, name });
-    return data.rekorde;
+  /** Ergebnis eintragen: {platz, verbessert, bestes, liste}. */
+  async submit(token, category, points) {
+    try {
+      return await request(this.fetchFn, this.url,
+        { aktion: "eintragen", marke: token, kategorie: category, punkte: points }, this.account.key);
+    } catch (error) {
+      if (error.status === 401) this.account.forget();
+      throw error;
+    }
   }
-}
-
-/** Ist `points` ein neuer Rekord gegenueber `record` (oder gibt es noch keinen)? */
-export function beatsRecord(points, record) {
-  return points > 0 && (!record || points > record.punkte);
 }
 
 /** Erlaubte Namen wie auf dem Server: 1-20 Zeichen, Buchstaben, Ziffern, Leerzeichen, . _ - ! ? */

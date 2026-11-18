@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#eaf6ff">
-  <meta name="waagenspiel-version" content="7">
+  <meta name="waagenspiel-version" content="8">
   <meta name="description" content="Waagen-Spiel: Schau dir die Waagen an und finde die schwerste Figur.">
   <title>Waagen-Spiel</title>
   <link rel="manifest" href="manifest.webmanifest">
@@ -30,9 +30,48 @@
       <button id="los" class="big good">Los geht's!</button>
       <div class="links">
         <button id="zur-bestenliste" class="link" type="button">Bestenliste</button>
+        <button id="zum-konto" class="link" type="button">Spielername wählen</button>
         <button id="ton" class="link" type="button"></button>
       </div>
       <p id="laden" class="note"></p>
+      <p class="footer"><a href="datenschutz.html">Datenschutz</a></p>
+    </section>
+
+    <!-- Spielername -->
+    <section id="konto" class="screen" hidden>
+      <h1>Spielername</h1>
+      <div id="konto-neu">
+        <p class="sub">Mit einem Spielernamen kommen deine Ergebnisse in die Bestenliste.
+          Kein Passwort, keine E-Mail: Dieses Gerät merkt sich den Namen.</p>
+        <form id="name-form" class="name-row wide">
+          <input id="name-feld" maxlength="20" autocomplete="nickname" enterkeyhint="go" placeholder="Dein Spielername" required>
+          <button class="small good" type="submit">Los</button>
+        </form>
+        <p class="note">Schon einen Namen auf einem anderen Gerät? Dort unter „Spielername“ einen Code erzeugen:</p>
+        <form id="code-form" class="name-row wide">
+          <input id="code-feld" maxlength="20" autocomplete="off" autocapitalize="characters" placeholder="WAAGE-XXXX-XXXX" required>
+          <button class="small blue" type="submit">Übernehmen</button>
+        </form>
+      </div>
+      <div id="konto-da" hidden>
+        <p class="sub">Du spielst als <b id="konto-name"></b>.</p>
+        <h2>Auf ein anderes Gerät übertragen</h2>
+        <button id="code-zeigen" class="small gold" type="button">Code erzeugen</button>
+        <p id="code-anzeige" class="code-box" hidden></p>
+        <h2>Name ändern</h2>
+        <form id="umbenennen-form" class="name-row wide">
+          <input id="umbenennen-feld" maxlength="20" autocomplete="nickname" required>
+          <button class="small blue" type="submit">Ändern</button>
+        </form>
+        <h2>Geräte mit diesem Namen</h2>
+        <ul id="geraete" class="devices"></ul>
+        <div class="links">
+          <button id="abmelden" class="link" type="button">Auf diesem Gerät abmelden</button>
+          <button id="name-loeschen" class="link danger" type="button">Name löschen</button>
+        </div>
+      </div>
+      <p id="konto-status" class="note"></p>
+      <button id="konto-zurueck" class="big blue">Zurück</button>
     </section>
 
     <!-- Spiel -->
@@ -67,9 +106,10 @@
     <!-- Bestenliste -->
     <section id="bestenliste" class="screen" hidden>
       <h1>Bestenliste</h1>
-      <p class="sub">Je Schwierigkeit und Zeit gibt es einen Rekord. Wer ihn bricht, darf sich eintragen.</p>
+      <p class="sub">Die besten zehn je Schwierigkeit und Zeit. Es zählen nur volle Partien auf Zeit mit Spielernamen.</p>
+      <div id="liste-stufe" class="chips" role="radiogroup" aria-label="Schwierigkeit"></div>
       <div id="liste-zeit" class="chips" role="radiogroup" aria-label="Zeit"></div>
-      <table id="liste" class="stats board"></table>
+      <ol id="liste" class="stats board"></ol>
       <p id="liste-status" class="note"></p>
       <button id="liste-zurueck" class="big blue">Zurück</button>
     </section>
@@ -87,14 +127,7 @@
       </table>
       <div id="welt" class="world" hidden>
         <p id="welt-text"></p>
-        <form id="welt-form" hidden>
-          <label for="welt-name">Dein Name für die Bestenliste</label>
-          <div class="name-row">
-            <input id="welt-name" maxlength="20" autocomplete="nickname" enterkeyhint="send" required>
-            <button id="welt-senden" class="small good" type="submit">Eintragen</button>
-          </div>
-          <p id="welt-fehler" class="bad-text"></p>
-        </form>
+        <button id="welt-name" class="small gold" type="button" hidden>Spielernamen wählen</button>
       </div>
       <div id="ende-figuren" class="row-figures"></div>
       <div class="end-buttons">

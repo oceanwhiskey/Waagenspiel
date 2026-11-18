@@ -58,19 +58,27 @@ deshalb sind die Lösungsschritte vorberechnet. Mehr Rätsel je Stufe:
 ## Bestenliste
 
 Eigene Rekorde und Einstellungen liegen nur im Browser des Geräts
-(`localStorage`). Dazu kommt eine **globale Bestenliste** (`bestenliste.php`,
-`bestenliste.js`): Je Schwierigkeit und Zeit gibt es einen Rekord, und wer ihn
-in einer vollen Partie auf Zeit bricht, darf sich mit einem Namen eintragen.
-Übertragen werden nur Kategorie, Punkte und dieser Name.
+(`localStorage`). Dazu kommen **Spielernamen** und eine **Top 10** je
+Schwierigkeit und Zeit (`spieler.php`, `bestenliste.php`, `inc/gemeinsam.php`,
+`bestenliste.js`; Konzept in `docs/04_konzept_mehrspieler.md`). Ein
+Spielername braucht kein Passwort und keine E-Mail: Das Gerät bekommt einen
+zufälligen Schlüssel, der Server speichert nur dessen Hash.
 
-- Braucht PHP (ab 7.4) und Schreibrechte im Ordner der Seite. Beim ersten
-  Aufruf legt `bestenliste.php` den Ordner `bestenliste-daten/` an, sperrt ihn
-  per `.htaccess` und erzeugt dort einen geheimen Schlüssel (`geheim.txt`).
-  Der Schlüssel steht deshalb in keinem Repository.
+- Braucht PHP (ab 7.4) und eine MySQL-Datenbank. Die Zugangsdaten liegen in
+  `waagenspiel-config/db.ini` **außerhalb** der Webseiten (die PHP-Dateien
+  suchen sie in den Ordnern darüber). Format:
+  `[datenbank]` mit `host`, `port`, `name`, `benutzer`, `passwort` (in
+  Anführungszeichen). Die Tabellen (`ws_…`) entstehen beim ersten Aufruf.
+- `inc/` ist per `.htaccess` gesperrt.
 - Schutz gegen einfaches Schummeln: Beim Spielstart gibt es eine signierte
   Spielmarke. Der Server nimmt sie erst nach Ablauf der Spielzeit an, nur
   einmal und nur mit glaubwürdigen Punkten (höchstens 150 je Sekunde). Wer es
   darauf anlegt, kann im Browser trotzdem schummeln.
-- Zurücksetzen: `bestenliste-daten/daten.json` löschen. Einen einzelnen
-  Eintrag entfernen: in dieser Datei den Eintrag der Kategorie löschen.
-- Ohne PHP läuft das Spiel ganz normal, nur ohne globale Bestenliste.
+- Zurücksetzen: Tabelle `ws_ergebnis` leeren. Einen unpassenden Namen
+  entfernen: seine Zeile in `ws_spieler` löschen (Geräte und Ergebnisse
+  verschwinden mit).
+- Ohne PHP und Datenbank läuft das Spiel ganz normal, nur ohne Namen und
+  Bestenliste.
+- `datenschutz.html` beschreibt, was gespeichert wird. `impressum-vorlage.html`
+  ist eine Vorlage: ausfüllen, als `impressum.html` speichern, hochladen und
+  auf der Startseite neben „Datenschutz“ verlinken.

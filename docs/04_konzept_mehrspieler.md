@@ -1,7 +1,9 @@
 # Konzept: Spielername und Spielen gegen andere
 
-Stand: Entwurf, noch nicht umgesetzt. Entschieden: Anmeldung über
-Spielername und Geräteschlüssel, ohne Passwort und ohne E-Mail.
+Stand: Schritt 1 (Spielername und Bestenliste mit Namen) ist umgesetzt:
+`web/spieler.php`, `web/bestenliste.php`, `web/inc/gemeinsam.php`,
+`web/bestenliste.js`. Die Schritte 2 bis 4 sind noch Entwurf. Entschieden:
+Anmeldung über Spielername und Geräteschlüssel, ohne Passwort und ohne E-Mail.
 
 Ziel: Man wählt einen Spielernamen und misst sich mit anderen. Es bleibt
 schlicht: keine Echtzeit-Technik, keine privaten Daten, keine fremden
@@ -35,19 +37,21 @@ Es gibt kein Passwort und keine E-Mail-Adresse. Das Gerät ist der Ausweis.
    Weil der Schlüssel zufällig und lang ist, genügt ein einfacher Hash; ein
    langsames Passwort-Verfahren ist nicht nötig.
 3. **Bei jedem Aufruf** schickt der Browser den Schlüssel im Kopf
-   `Authorization: Bearer …`. Ein Cookie gibt es nicht; damit können fremde
-   Seiten auch keine Aufrufe unterschieben.
-4. **Auf ein anderes Gerät übertragen**: Unter „Mein Name“ erzeugt man einen
-   Übertragungscode, z. B. `WAAGE-7KQ2-M9XD` (auch als Link). Auf dem neuen
-   Gerät eingegeben, bekommt es einen eigenen Geräteschlüssel für denselben
-   Namen. Der Code gilt 10 Minuten und nur einmal; nach 5 falschen Eingaben
-   wird er ungültig.
+   `X-Waagenspiel-Schluessel`. (`Authorization` würde Apache bei manchen
+   PHP-Einstellungen verschlucken.) Ein Cookie gibt es nicht; damit können
+   fremde Seiten auch keine Aufrufe unterschieben.
+4. **Auf ein anderes Gerät übertragen**: Unter „Spielername“ erzeugt man
+   einen Übertragungscode, z. B. `WAAGE-7KQ2-M9XD`. Auf dem neuen Gerät
+   eingegeben, bekommt es einen eigenen Geräteschlüssel für denselben Namen.
+   Der Code gilt 10 Minuten und nur einmal. Gegen Durchprobieren: Nach 50
+   falschen Codes in 10 Minuten nimmt der Server eine Weile keine mehr an.
 5. **Mehrere Geräte** dürfen denselben Namen nutzen. Unter „Mein Name“ sieht
    man sie (nur „Gerät seit 18.11.“, ohne weitere Angaben) und kann einzelne
    abmelden.
 6. **Gehen die Browserdaten verloren** und es gibt kein zweites Gerät, ist der
-   Name nicht mehr nutzbar. Man legt einen neuen an. Ungenutzte Namen werden
-   nach einem Jahr ohne Spiel freigegeben.
+   Name nicht mehr nutzbar. Man legt einen neuen an. Meldet man das letzte
+   Gerät selbst ab, wird der Name samt Ergebnissen gelöscht. (Ungenutzte Namen
+   nach einem Jahr freizugeben ist noch nicht umgesetzt.)
 7. **Name löschen** geht mit einem Knopf: Name, Geräteschlüssel und alle
    Ergebnisse verschwinden (in fremden Duellen erscheint dann „gelöscht“).
 
@@ -129,10 +133,22 @@ JSON-Datei wäre dafür zu einfach. Zugriff nur über PDO mit vorbereiteten
 Anweisungen. Die Zugangsdaten stehen in einer Datei außerhalb des
 Repositorys und außerhalb des öffentlichen Ordners.
 
+Umgesetzt (Schritt 1, Tabellen mit Präfix `ws_`, legt `inc/gemeinsam.php`
+beim ersten Aufruf an):
+
 ```text
-spieler       id, name, name_klein (eindeutig), erstellt, zuletzt_gespielt
-geraet        schluessel_hash, spieler_id, erstellt, zuletzt_gesehen
-uebertragung  code_hash, spieler_id, ablauf, fehlversuche
+spieler       id, name, name_klein (eindeutig), erstellt, zuletzt
+geraet        id, spieler_id, schluessel_hash (eindeutig), erstellt, zuletzt
+uebertragung  code_hash, spieler_id, ablauf
+ergebnis      spieler_id, kategorie, punkte, erreicht   (bestes je Kategorie)
+marke         kennung, benutzt                          (eingelöste Spielmarken)
+fehlversuch   id, art, zeit                             (gegen Durchprobieren)
+einstellung   schluessel, wert                          (Geheimnis für Spielmarken)
+```
+
+Für Schritt 2 bis 4 kommen dazu:
+
+```text
 raetsel       id, stufe, waagen (Text wie "b + c < a")
 partie        id, art (frei|tag|duell), code (für Links), stufe, zeit_s,
               seed, erstellt_von, erstellt, ablauf

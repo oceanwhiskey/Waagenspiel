@@ -313,6 +313,47 @@ h2 { font-size: 1rem; margin: 12px 0 6px; }
 .name-row input:focus { outline: none; border-color: var(--blue); }
 #welt-fehler { font-weight: 600; font-size: 0.9rem; margin: 6px 0 0; min-height: 0; }
 
+/* --- Spielername ----------------------------------------------------------- */
+
+#konto { display: flex; flex-direction: column; align-items: center; text-align: center; overflow-y: auto; padding-bottom: 16px; }
+#konto > div { width: min(100%, 400px); }
+#konto h2 { margin-top: 18px; }
+.name-row.wide { width: 100%; margin: 10px 0; }
+.code-box {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  background: #fff8e1;
+  border: 2px dashed var(--gold);
+  border-radius: 12px;
+  font-size: 0.95rem;
+}
+.code-box strong { display: block; font-size: 1.4rem; letter-spacing: 0.06em; margin-bottom: 4px; }
+.devices { list-style: none; padding: 0; margin: 6px 0; text-align: left; }
+.devices li { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px; border-bottom: 1px solid var(--line); }
+.devices .link { margin: 0; }
+.link.danger { color: var(--bad); }
+.footer { margin-top: auto; padding-top: 18px; font-size: 0.85rem; }
+.footer a { color: var(--soft); }
+
+/* Top 10 */
+ol.board { list-style: none; padding: 6px 14px; }
+ol.board li {
+  display: grid;
+  grid-template-columns: 2.2em 1fr auto;
+  grid-template-areas: "rank who pts" "rank when pts";
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+ol.board li:last-child { border-bottom: none; }
+ol.board li.mine { background: #fff3c4; border-radius: 10px; }
+ol.board .rank { grid-area: rank; font-weight: 800; color: var(--soft); text-align: center; }
+ol.board .who { grid-area: who; font-weight: 700; }
+ol.board .when { grid-area: when; color: var(--soft); font-size: 0.75rem; }
+ol.board .pts { grid-area: pts; font-weight: 800; font-size: 1.15rem; color: var(--brass-dark); padding-right: 6px; }
+#bestenliste .chips + .chips { margin-top: 0; }
+
 /* --- Animationen ------------------------------------------------------------- */
 
 @keyframes shake {
