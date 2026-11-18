@@ -1,0 +1,225 @@
+# Konzept: Spielername und Spielen gegen andere
+
+Stand: Entwurf, noch nicht umgesetzt. Entschieden: Anmeldung über
+Spielername und Geräteschlüssel, ohne Passwort und ohne E-Mail.
+
+Ziel: Man wählt einen Spielernamen und misst sich mit anderen. Es bleibt
+schlicht: keine Echtzeit-Technik, keine privaten Daten, keine fremden
+Dienste. Alles läuft auf dem vorhandenen Webspace bei Biohost (PHP 7.4, MySQL
+über PDO; geprüft am 18.11.2026).
+
+## 1. Was es geben soll
+
+| Funktion | Kurz |
+|---|---|
+| **Spielername** | Ein selbst gewählter Name, an das Gerät gebunden. Ohne Namen spielt man weiter wie bisher. |
+| **Tagesrätsel** | Jeden Tag dieselben Rätsel für alle, eine Tagesliste. |
+| **Duell** | Ich spiele eine Partie, schicke einen Link, der andere spielt *dieselben* Rätsel. Wer mehr Punkte hat, gewinnt. |
+| **Bestenliste** | Wie heute, aber Einträge gehören zu Spielernamen statt zu frei getippten Namen. |
+
+Bewusst **nicht**: gleichzeitiges Live-Duell. Dafür bräuchte es eine
+dauernde Verbindung (WebSockets), die ein PHP-Webspace nicht gut kann, und es
+müssten beide zur selben Zeit online sein. Ein Duell nacheinander mit
+denselben Rätseln ist genauso fair und viel einfacher.
+
+## 2. Spielername und Geräteschlüssel
+
+Es gibt kein Passwort und keine E-Mail-Adresse. Das Gerät ist der Ausweis.
+
+1. **Beim ersten Mal** wählt man einen Spielernamen (1–20 Zeichen,
+   Buchstaben, Ziffern, Leerzeichen und `. _ - ! ?`, eindeutig ohne Rücksicht
+   auf Groß- und Kleinschreibung).
+2. **Der Server erzeugt einen Geräteschlüssel**: 32 Zufallsbytes
+   (`random_bytes`), als Text etwa 43 Zeichen. Der Browser speichert ihn in
+   `localStorage`. Der Server speichert nur `hash('sha256', schlüssel)`.
+   Weil der Schlüssel zufällig und lang ist, genügt ein einfacher Hash; ein
+   langsames Passwort-Verfahren ist nicht nötig.
+3. **Bei jedem Aufruf** schickt der Browser den Schlüssel im Kopf
+   `Authorization: Bearer …`. Ein Cookie gibt es nicht; damit können fremde
+   Seiten auch keine Aufrufe unterschieben.
+4. **Auf ein anderes Gerät übertragen**: Unter „Mein Name“ erzeugt man einen
+   Übertragungscode, z. B. `WAAGE-7KQ2-M9XD` (auch als Link). Auf dem neuen
+   Gerät eingegeben, bekommt es einen eigenen Geräteschlüssel für denselben
+   Namen. Der Code gilt 10 Minuten und nur einmal; nach 5 falschen Eingaben
+   wird er ungültig.
+5. **Mehrere Geräte** dürfen denselben Namen nutzen. Unter „Mein Name“ sieht
+   man sie (nur „Gerät seit 18.11.“, ohne weitere Angaben) und kann einzelne
+   abmelden.
+6. **Gehen die Browserdaten verloren** und es gibt kein zweites Gerät, ist der
+   Name nicht mehr nutzbar. Man legt einen neuen an. Ungenutzte Namen werden
+   nach einem Jahr ohne Spiel freigegeben.
+7. **Name löschen** geht mit einem Knopf: Name, Geräteschlüssel und alle
+   Ergebnisse verschwinden (in fremden Duellen erscheint dann „gelöscht“).
+
+Gespeichert werden damit nur ein ausgedachter Spielername, Hashes der
+Geräteschlüssel und Spielergebnisse. Würde die Datenbank gestohlen, ließe sich
+mit den Hashes nichts anfangen, und es gibt kein Passwort, das jemand auch
+anderswo benutzt.
+
+## 3. Fair spielen: der Server teilt die Rätsel aus
+
+Heute liegt `raetsel.json` vollständig im Browser, und in der kanonischen Form
+ist immer `a` die Antwort. Für eine private Partie ist das egal, für Wettkämpfe
+nicht. Deshalb gilt in allen Modi mit Spielernamen:
+
+1. Der Server wählt die Rätsel und benennt die Figuren um. Der Browser bekommt
+   nur die Waagen, **nicht die Antwort**.
+2. Für jede Antwort fragt der Browser den Server: `wahl = 2`. Der Server prüft,
+   rechnet die Punkte (Serienfaktor, Abzug nach Bedenkzeit) mit **seiner**
+   Uhr und liefert das Ergebnis und das nächste Rätsel.
+3. Die Spielzeit misst ebenfalls der Server. Nach Ablauf nimmt er keine
+   Antworten mehr an.
+
+Damit sind Punkte nicht mehr fälschbar. Eine Runde kostet einen kurzen
+Serveraufruf (etwa 100 ms); das fällt im Spiel nicht auf. Die Bedenkzeit
+enthält diese Verzögerung, aber für alle gleich. Ein Restrisiko bleibt: Jemand
+könnte ein Programm die Rätsel lösen lassen. Das lässt sich bei einem
+Rätselspiel nicht verhindern.
+
+Die Rätsel liegen dafür auf dem Server in einer Tabelle (die 1 600 aus dem
+Web-Export, später gern mehr). Tipps gibt es nur beim Üben, nicht im
+Wettkampf.
+
+## 4. Spielarten
+
+### 4.1 Tagesrätsel
+
+- Jeden Tag ein fester Satz: 10 Rätsel, aufsteigend von Leicht bis Profi,
+  ohne Zeitlimit für den ganzen Satz, aber mit der üblichen Bedenkzeit-Wertung
+  pro Rätsel.
+- Jeder Spielername kann den Satz **einmal** spielen. Danach sieht man die
+  Tagesliste und die Lösungen.
+- Auswahl: aus dem Datum abgeleiteter Zufall (`seed = Datum`), damit alle
+  dieselben Rätsel bekommen und niemand sie vorher kennt.
+
+### 4.2 Duell
+
+1. A wählt Schwierigkeit und Zeit (wie heute) und tippt auf
+   „Herausfordern“. A spielt sofort.
+2. Danach gibt es einen **Link** (`imazeki.de/#duell/7KQ2M9`), den A per
+   Messenger teilt (auf dem Handy über das Teilen-Menü). Optional kann A auch
+   einen Spielernamen eintragen; dann taucht das Duell bei B unter „Offene
+   Duelle“ auf.
+3. B öffnet den Link, wählt einen Spielernamen (falls noch keiner da ist) und
+   spielt **dieselben Rätsel in derselben Reihenfolge**. B sieht As Ergebnis
+   erst hinterher.
+4. Ergebnisseite für beide: Punkte, Richtig/Falsch, beste Serie, Gewinner.
+5. Ein Duell läuft 7 Tage; danach verfällt es. Ein Link kann von mehreren
+   angenommen werden („Gruppen-Duell“): dann eine kleine Rangliste.
+
+Damit A nicht vorher üben kann, bekommt jedes Duell einen eigenen Satz
+Rätsel (Auswahl mit eigenem Seed). Weil die Zeit begrenzt ist, braucht ein
+Duell mehr Rätsel als jemand schafft: Es werden 40 vorbereitet; wer schneller
+ist, sieht mehr davon.
+
+### 4.3 Bestenliste
+
+- Wie heute ein Rekord je Schwierigkeit und Zeit, zusätzlich eine
+  **Top 10** je Kategorie (sonst ist ein früher Rekord für immer uneinholbar).
+- Nur Partien mit Spielernamen zählen; der Name kommt vom Gerät, nicht aus
+  einem Eingabefeld. So kann sich niemand als jemand anderes eintragen.
+- Ohne Namen spielt man weiter, sieht aber „Wähl einen Spielernamen, damit
+  dein Ergebnis zählt“.
+
+## 5. Datenbank
+
+MySQL ist hier sinnvoll: Namen, Geräte, Duelle und Antworten werden
+gleichzeitig gelesen und geschrieben und müssen gefiltert werden. Die heutige
+JSON-Datei wäre dafür zu einfach. Zugriff nur über PDO mit vorbereiteten
+Anweisungen. Die Zugangsdaten stehen in einer Datei außerhalb des
+Repositorys und außerhalb des öffentlichen Ordners.
+
+```text
+spieler       id, name, name_klein (eindeutig), erstellt, zuletzt_gespielt
+geraet        schluessel_hash, spieler_id, erstellt, zuletzt_gesehen
+uebertragung  code_hash, spieler_id, ablauf, fehlversuche
+raetsel       id, stufe, waagen (Text wie "b + c < a")
+partie        id, art (frei|tag|duell), code (für Links), stufe, zeit_s,
+              seed, erstellt_von, erstellt, ablauf
+teilnahme     id, partie_id, spieler_id, begonnen, beendet,
+              punkte, richtig, falsch, beste_serie, serie_aktuell
+antwort       teilnahme_id, nr, raetsel_id, umbenennung, gezeigt_um,
+              wahl, richtig, punkte
+```
+
+`antwort.gezeigt_um` ist die Server-Uhrzeit, zu der das Rätsel ausgeliefert
+wurde; daraus kommt die Bedenkzeit. Die alte `bestenliste.php` mit ihrer
+JSON-Datei kann danach entfallen.
+
+## 6. Schnittstelle (PHP, JSON)
+
+| Aufruf | Zweck |
+|---|---|
+| `spieler.php` `anlegen` (name) | Namen wählen, liefert Geräteschlüssel |
+| `spieler.php` `ich`, `umbenennen`, `geraete`, `geraet_abmelden`, `loeschen` | Name verwalten |
+| `spieler.php` `code_erzeugen`, `code_einloesen` | auf anderes Gerät übertragen |
+| `partie.php` `start` (art, stufe, zeit, code) | Partie oder Duell beginnen, liefert erstes Rätsel |
+| `partie.php` `antwort` (teilnahme, nr, wahl) | prüft, liefert Punkte, Lösung und nächstes Rätsel |
+| `partie.php` `ergebnis` (code) | Ergebnisseite eines Duells oder Tagesrätsels |
+| `listen.php` `bestenliste`, `tag`, `meine_duelle` | Listen |
+
+Alle Aufrufe außer `anlegen`, `code_einloesen` und den öffentlichen Listen
+brauchen den Geräteschlüssel. Höchstens 30 neue Namen pro Stunde und
+Server, damit niemand die Datenbank vollschreibt.
+
+## 7. Oberfläche
+
+Startseite (Ergänzungen fett):
+
+```text
+  Waagen-Spiel
+  [Schwierigkeit]  [Zeit]
+  [ Los geht's! ]
+  [ Tagesrätsel ]  [ Herausfordern ]
+  Bestenliste · Ton: an · **Spielername wählen** (bzw. **Ingo ▾**: Meine Duelle,
+                                                   Auf anderes Gerät, Name löschen)
+```
+
+- **Spielername wählen**: ein Feld, ein Knopf, darunter klein „Schon einen
+  Namen auf einem anderen Gerät? Code eingeben“.
+- **Herausfordern**: startet sofort eine Partie mit den gewählten
+  Einstellungen; am Ende „Link teilen“.
+- **Duell-Link öffnen**: „Ingo fordert dich heraus: Profi, 60 s. Annehmen?“
+- **Ergebnis**: zwei Spalten nebeneinander, Gewinner hervorgehoben.
+
+Das Spiel selbst bleibt unverändert. Nur kommen die Rätsel bei Partien mit
+Namen vom Server statt aus `raetsel.json`. Üben und freies Spielen ohne Namen
+funktionieren weiter offline.
+
+## 8. Datenschutz und Recht
+
+- Gespeichert werden nur: ein selbst gewählter Spielername, Hashes der
+  Geräteschlüssel, Spielergebnisse und Zeitpunkte. Kein Passwort, keine
+  E-Mail, keine IP-Adressen in der Datenbank.
+- Der Geräteschlüssel im Browser ist technisch nötig für die gewählte
+  Funktion; ein Einwilligungsbanner braucht es dafür nicht.
+- Ein kurzer **Datenschutzhinweis** und ein **Impressum** gehören trotzdem auf
+  die Seite (der Webserver protokolliert Zugriffe, und die alte
+  `legal notice.html` ist weg). Beides als kurze Seiten, verlinkt unten auf der
+  Startseite.
+- „Name löschen“ entfernt alle Daten zu diesem Namen.
+
+## 9. Umsetzung in Schritten
+
+1. **Spielername und Bestenliste mit Namen.** Datenbank anlegen,
+   `spieler.php`, Namensblatt, Übertragung per Code, Bestenliste auf
+   Spielernamen umstellen, Datenschutzhinweis und Impressum.
+2. **Server teilt Rätsel aus.** `raetsel`-Tabelle befüllen, `partie.php`
+   für Partien auf Zeit mit Namen; Punkte rechnet der Server.
+3. **Tagesrätsel.**
+4. **Duelle per Link** und „Meine Duelle“.
+5. Später bei Bedarf: Freunde, Statistiken, Live-Duell.
+
+Jeder Schritt ist für sich nutzbar. Schritt 1 und 2 sind der größte Teil;
+3 und 4 bauen fast nur noch Listen und Seiten darauf.
+
+## 10. Offene Entscheidungen
+
+| Frage | Vorschlag |
+|---|---|
+| Tagesrätsel: wie viele, mit Zeitlimit? | 10 Rätsel, ohne Gesamtzeit |
+| Duelle nur per Link oder auch gezielt an einen Namen? | beides |
+| Bestenliste: nur Rekord oder Top 10? | Top 10 je Kategorie |
+| Spiele ohne Namen in der Bestenliste? | nein, nur mit Namen |
+| Gelöschte Namen in fremden Duellen? | als „gelöscht“ anzeigen, damit die Gegner ihr Ergebnis behalten |
+| Ungenutzte Namen freigeben? | nach einem Jahr ohne Spiel |
