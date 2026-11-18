@@ -14,7 +14,7 @@
   <ul id="out"></ul>
   <script type="module">
     import {
-      FixedDifficulty, GameSession, Highscores, RisingDifficulty, RoundSource, explain, makeRound,
+      FixedDifficulty, GameSession, Highscores, RisingDifficulty, RoundSource, explain, explainParts, makeRound,
       panItems, panPositions, parseScale, pickCharacters, pointsFor, scaleView, seededRandom, stepsFor,
       penaltyFor, thinkSeconds, SETTLE_SECONDS,
     } from "./spiel.js";
@@ -144,6 +144,16 @@
       }
       const offline = new GlobalBoard("x", async () => ({ json: async () => { throw new Error("kein JSON"); } }));
       try { await offline.records(); ok(false); } catch (e) { ok(e.message.includes("nicht erreichbar")); }
+    });
+
+    await test("Erklaerzeile zerfaellt in Text und Figuren der Runde", () => {
+      const round = makeRound({ s: ["b < a", "c < a", "d < a"], steps: [] }, 1, seededRandom(3));
+      const parts = explainParts("Waage 2: 3b + a = 2c", round);
+      eq(parts[0], { text: `Waage ${round.order.indexOf(1) + 1}: ` });
+      eq(parts[1], { count: 3, who: round.perm[1] });
+      eq(parts[3], { count: 1, who: round.perm[0] });
+      eq(parts[5], { count: 2, who: round.perm[2] });
+      eq(parts.filter((p) => "who" in p).length, 3);
     });
 
     await test("Waagennummern folgen dem Mischen", () => {

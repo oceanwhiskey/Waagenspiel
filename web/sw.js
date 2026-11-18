@@ -1,7 +1,7 @@
 // Offline-Speicher: zuerst das Netz (immer die neueste Version), sonst der Speicher.
 // Nur die Dateien des Spiels selbst; alles andere auf derselben Seite (z. B. Noten,
 // Musik) geht unberuehrt am Service Worker vorbei.
-const CACHE = "waagenspiel-v5";
+const CACHE = "waagenspiel-v6";
 const FILES = [
   "./", "index.html", "spiel.css", "spiel.js", "figuren.js", "oberflaeche.js", "bestenliste.js", "raetsel.json",
   "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png", "icon-180.png",

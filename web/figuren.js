@@ -67,6 +67,15 @@ export function characterIcon(ch) {
   return svg;
 }
 
+/** Kleine Figur im Text (Erklaerungen, Meldungen); Sprachausgaben lesen den Namen. */
+export function inlineFigure(ch) {
+  const svg = el("svg", { viewBox: "-40 -40 80 80", class: "figur-inline", role: "img", "aria-label": ch.name });
+  const title = el("title", {}, svg);
+  title.textContent = ch.name;
+  svg.appendChild(character(ch, 30));
+  return svg;
+}
+
 /** Eine Balkenwaage; set(angle) neigt sie, mark(who, color) umringt Figuren. */
 export class ScaleDrawing {
   static ARM = 76;

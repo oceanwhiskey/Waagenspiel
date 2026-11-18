@@ -138,14 +138,29 @@ export function stepsFor(round, choice) {
   return round.steps.filter((s) => needed.has(key(s.fact)));
 }
 
-/** Ersetzt a-d (auch "2a") durch Figurennamen und "Waage k" durch die gezeigte Nummer. */
+/**
+ * Zerlegt eine Erklaerzeile in Text und Figuren:
+ * [{text: "Waage 2: "}, {count: 3, who: 1}, {text: " = "}, {count: 1, who: 0}, ...].
+ * "Waage k" bekommt die gezeigte Nummer, a-d (auch "2a") werden zu Figuren der Runde.
+ */
+export function explainParts(line, round) {
+  const renumbered = line.replace(/\bWaage (\d)\b/g, (_, k) => `Waage ${round.order.indexOf(Number(k) - 1) + 1}`);
+  const parts = [];
+  let last = 0;
+  for (const match of renumbered.matchAll(/\b(\d*)([abcd])\b/g)) {
+    if (match.index > last) parts.push({ text: renumbered.slice(last, match.index) });
+    parts.push({ count: match[1] ? Number(match[1]) : 1, who: round.perm[LETTERS.indexOf(match[2])] });
+    last = match.index + match[0].length;
+  }
+  if (last < renumbered.length) parts.push({ text: renumbered.slice(last) });
+  return parts;
+}
+
+/** Wie explainParts, aber als Text mit Figurennamen (z. B. "3× Lila"). */
 export function explain(line, round, characters) {
-  return line
-    .replace(/\bWaage (\d)\b/g, (_, k) => `Waage ${round.order.indexOf(Number(k) - 1) + 1}`)
-    .replace(/\b(\d*)([abcd])\b/g, (_, count, letter) => {
-      const name = characters[round.perm[LETTERS.indexOf(letter)]].name;
-      return count ? `${count}× ${name}` : name;
-    });
+  return explainParts(line, round)
+    .map((p) => ("text" in p ? p.text : p.count > 1 ? `${p.count}× ${characters[p.who].name}` : characters[p.who].name))
+    .join("");
 }
 
 // --- Raetselquelle ----------------------------------------------------------

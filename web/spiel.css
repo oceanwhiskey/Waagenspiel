@@ -156,8 +156,14 @@ h2 { font-size: 1rem; margin: 12px 0 6px; }
   font-weight: 800;
   font-size: 0.95rem;
 }
-.card .figur-icon { width: min(17vw, 76px); height: min(17vw, 76px); overflow: visible; }
-.card .key { position: absolute; top: 4px; left: 9px; font-size: 0.75rem; color: var(--soft); }
+.card { padding: 12px 2px; }
+.card .figur-icon { width: min(19vw, 84px); height: min(19vw, 84px); overflow: visible; }
+.card .key { position: absolute; top: 4px; left: 9px; font-size: 0.75rem; color: var(--soft); display: none; }
+/* Tastennummern nur mit Maus und Tastatur; auf dem Handy sind sie nur Rauschen */
+@media (hover: hover) and (pointer: fine) { .card .key { display: block; } }
+
+/* Kleine Figuren im Text */
+.figur-inline { width: 1.15em; height: 1.15em; vertical-align: -0.22em; overflow: visible; margin: 0 0.06em; }
 .card.richtig { background: #d8f3dc; border-color: var(--good); }
 .card.richtig .figur-icon { animation: jump 0.45s ease-out; }
 .card.falsch { background: #ffe3e6; border-color: var(--bad); animation: shake 0.35s; }

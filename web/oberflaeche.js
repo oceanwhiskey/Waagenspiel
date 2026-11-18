@@ -7,12 +7,12 @@ import {
   Highscores,
   LEVEL_TITLES,
   RoundSource,
-  explain,
+  explainParts,
   pickCharacters,
   stepsFor,
   streakFactor,
 } from "./spiel.js";
-import { ScaleDrawing, animateTilt, character, characterIcon } from "./figuren.js";
+import { ScaleDrawing, animateTilt, character, characterIcon, inlineFigure } from "./figuren.js";
 import { GlobalBoard, beatsRecord, validName } from "./bestenliste.js";
 
 const $ = (id) => document.getElementById(id);
@@ -368,12 +368,11 @@ class App {
       card.className = "card";
       card.setAttribute("aria-label", ch.name);
       card.append(characterIcon(ch));
-      const name = document.createElement("span");
-      name.textContent = ch.name;
-      const key = document.createElement("span");
+      const key = document.createElement("span"); // Taste 1-4, nur mit Maus/Tastatur sichtbar
       key.className = "key";
+      key.setAttribute("aria-hidden", "true");
       key.textContent = i + 1;
-      card.append(name, key);
+      card.append(key);
       card.onclick = () => this.choose(i);
       box.appendChild(card);
       return card;
@@ -464,16 +463,17 @@ class App {
     this.drawings.forEach((d) => d.mark(feedback.answer, "loesung"));
     this.sound.wrong();
     navigator.vibrate?.(60);
-    const right = s.characters[feedback.answer].name;
-    const wrong = s.characters[choice].name;
+    const right = inlineFigure(s.characters[feedback.answer]);
     const msg = $("nachricht");
     msg.className = "message bad-text";
-    msg.textContent = `Leider nicht – ${right} ist am schwersten.` + (feedback.points ? `  ${feedback.points}`.replace("-", "−") : "");
+    msg.replaceChildren("Leider nicht – ", right, " ist am schwersten." + (feedback.points ? `  ${feedback.points}`.replace("-", "−") : ""));
     if (feedback.points) this.floatPoints(this.cards[choice], `${feedback.points}`.replace("-", "−"), true);
     if (s.isPractice) {
       const lines = stepsFor(this.round, choice).flatMap((step) => step.text);
       $("karten").hidden = true; // Antwort steht fest: Platz fuer Erklaerung und Waagen
-      this.openSheet(`Warum ist ${wrong} leichter als ${right}?`, lines, { more: false, ok: "Weiter" });
+      const title = ["Warum ist ", inlineFigure(s.characters[choice]), " leichter als ",
+        inlineFigure(s.characters[feedback.answer]), "?"];
+      this.openSheet(title, lines, { more: false, ok: "Weiter" });
       this.afterSheet = () => this.nextRound();
     } else {
       this.later(1000, () => this.nextRound());
@@ -495,11 +495,11 @@ class App {
 
   openSheet(title, lines, { more, ok }) {
     const s = this.session;
-    $("blatt-titel").textContent = title;
+    $("blatt-titel").replaceChildren(...(Array.isArray(title) ? title : [title]));
     const list = $("blatt-text");
     list.replaceChildren(...lines.map((line) => {
       const li = document.createElement("li");
-      li.textContent = explain(line, this.round, s.characters);
+      li.replaceChildren(...this.richLine(line));
       return li;
     }));
     $("blatt-mehr").hidden = !more;
@@ -508,6 +508,13 @@ class App {
     $("blatt-kopf").setAttribute("aria-expanded", "true");
     $("blatt").hidden = false;
     list.scrollTop = 0;
+  }
+
+  /** Erklaerzeile mit kleinen Figuren statt Namen, z. B. "3× ▲ = ● + ■". */
+  richLine(line) {
+    const characters = this.session.characters;
+    return explainParts(line, this.round).flatMap((part) =>
+      "text" in part ? [part.text] : [part.count > 1 ? `${part.count}×` : "", inlineFigure(characters[part.who])]);
   }
 
   closeSheet() {
@@ -574,7 +581,7 @@ class App {
 // Muss zu <meta name="waagenspiel-version"> in index.html passen; bei jedem Update
 // beider Dateien erhoehen. Passt es nicht (alte Seite aus dem Browser-Cache, neues
 // Skript), wird die Seite einmal neu geladen.
-const VERSION = "5";
+const VERSION = "6";
 
 function pageIsCurrent() {
   const meta = document.querySelector('meta[name="waagenspiel-version"]');
