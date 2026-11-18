@@ -174,30 +174,44 @@ h2 { font-size: 1rem; margin: 12px 0 6px; }
 }
 
 /* --- Erklaerblatt ------------------------------------------------------------ */
+/* Liegt im Ablauf unter dem Spielfeld: Das Feld schrumpft, die Waagen bleiben sichtbar. */
 
 .sheet {
-  position: fixed;
-  left: 50%;
-  bottom: 0;
-  transform: translateX(-50%);
-  width: min(560px, 100%);
-  max-height: 50dvh;
-  overflow-y: auto;
+  flex: 0 0 auto;
+  max-height: 40%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin: 0 0 8px;
   background: var(--panel);
   border: 3px solid var(--gold);
-  border-bottom: none;
-  border-radius: 22px 22px 0 0;
-  padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
-  box-shadow: 0 -8px 30px rgba(43, 45, 66, 0.18);
-  animation: slide-up 0.25s ease-out;
-  z-index: 5;
+  border-radius: 18px;
+  padding: 10px 14px 12px;
+  box-shadow: 0 4px 14px rgba(43, 45, 66, 0.12);
+  animation: grow 0.2s ease-out;
 }
+.sheet-head {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  padding: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-align: left;
+}
+.chevron { color: var(--soft); transition: transform 0.2s; }
+.sheet.zu .chevron { transform: rotate(-90deg); }
+.sheet.zu ul { display: none; }
+.sheet ul { margin: 8px 0 0; padding-left: 1.1em; line-height: 1.4; font-size: 0.95rem; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
 .sheet[hidden] { display: none; }
-.sheet h3 { margin: 0 0 8px; }
-.sheet ul { margin: 0; padding-left: 1.1em; line-height: 1.45; }
-.sheet li { margin-bottom: 4px; }
-.sheet-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
-.sheet-buttons button[hidden] { display: none; }
+/* Nach einer falschen Antwort sind die Antwortknoepfe weg: mehr Platz fuer die Erklaerung */
+#spiel:has(#karten[hidden]) .sheet { max-height: 52%; }
+.sheet li { margin-bottom: 3px; }
+.sheet-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; flex: none; }
 
 /* --- Ende ------------------------------------------------------------------- */
 
@@ -228,6 +242,42 @@ h2 { font-size: 1rem; margin: 12px 0 6px; }
   z-index: 10;
 }
 
+/* --- Bestenliste ------------------------------------------------------------ */
+
+.links { display: flex; gap: 18px; justify-content: center; }
+.world-note { margin-top: 2px; }
+#bestenliste { display: flex; flex-direction: column; align-items: center; text-align: center; overflow-y: auto; padding-bottom: 16px; }
+#bestenliste .chips { margin: 12px 0; }
+.board td { font-size: 1rem; }
+.board td:first-child { font-weight: 700; }
+.board td:last-child { font-size: 1.1rem; }
+.board .who { display: block; font-weight: 600; color: var(--ink); font-size: 0.95rem; }
+.board .when { display: block; color: var(--soft); font-size: 0.75rem; font-weight: 400; }
+.board .empty { color: var(--soft); font-weight: 400; font-size: 0.95rem; }
+
+.world {
+  width: min(100%, 380px);
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: #fff8e1;
+  border: 2px solid var(--gold);
+  border-radius: 18px;
+}
+.world p { margin: 0 0 6px; font-weight: 700; }
+.world label { display: block; text-align: left; font-size: 0.9rem; color: var(--soft); margin-bottom: 4px; }
+.name-row { display: flex; gap: 8px; }
+.name-row input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 1.05rem;
+  padding: 8px 10px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+}
+.name-row input:focus { outline: none; border-color: var(--blue); }
+#welt-fehler { font-weight: 600; font-size: 0.9rem; margin: 6px 0 0; min-height: 0; }
+
 /* --- Animationen ------------------------------------------------------------- */
 
 @keyframes shake {
@@ -244,7 +294,7 @@ h2 { font-size: 1rem; margin: 12px 0 6px; }
 @keyframes glow { from { box-shadow: 0 0 0 0 #ffb70388; } to { box-shadow: 0 0 0 7px #ffb70333; } }
 @keyframes pulse { from { stroke-width: 2.5; } to { stroke-width: 5; } }
 @keyframes rise { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, -48px); } }
-@keyframes slide-up { from { transform: translate(-50%, 100%); } to { transform: translate(-50%, 0); } }
+@keyframes grow { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes fall { to { transform: translate(var(--dx), 110dvh) rotate(720deg); } }
 
 @media (prefers-reduced-motion: reduce) {

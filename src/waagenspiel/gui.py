@@ -78,12 +78,14 @@ def rounded_rect(canvas: tk.Canvas, x0: float, y0: float, x1: float, y1: float, 
 def draw_character(
     canvas: tk.Canvas, x: float, y: float, r: float, character: Character, tags: Sequence[str] = (), mood: str = "calm"
 ) -> None:
-    """Zeichnet eine Figur: Form in ihrer Farbe mit Gesicht."""
+    """Zeichnet eine Figur: schlichte Form in ihrer Farbe mit dunklerem Rand.
+
+    ``mood`` wird nicht mehr genutzt (die Figuren haben kein Gesicht mehr).
+    """
 
     tags = tuple(tags)
     fill, line = character.color, shade(character.color, -0.4)
     width = max(2, round(r / 10))
-    face_y = y
     if character.shape == "kreis":
         canvas.create_oval(x - r, y - r, x + r, y + r, fill=fill, outline=line, width=width, tags=tags)
     elif character.shape == "quadrat":
@@ -93,37 +95,11 @@ def draw_character(
         top, left, right = (x, y - 1.15 * r), (x - 1.1 * r, y + 0.9 * r), (x + 1.1 * r, y + 0.9 * r)
         points = [*top, *top, *right, *right, *left, *left]
         canvas.create_polygon(points, smooth=True, fill=fill, outline=line, width=width, tags=tags)
-        face_y = y + 0.28 * r
     else:  # tropfen
         points = [x, y - 1.25 * r, x + 0.35 * r, y - 0.75 * r, x + r, y - 0.05 * r, x + r, y + 0.45 * r,
                   x + 0.6 * r, y + r, x, y + r, x - 0.6 * r, y + r, x - r, y + 0.45 * r, x - r, y - 0.05 * r,
                   x - 0.35 * r, y - 0.75 * r]
         canvas.create_polygon(points, smooth=True, fill=fill, outline=line, width=width, tags=tags)
-        face_y = y + 0.2 * r
-    # Augen
-    eye_r, pupil_r = 0.24 * r, 0.12 * r
-    for dx in (-0.36 * r, 0.36 * r):
-        ex, ey = x + dx, face_y - 0.15 * r
-        canvas.create_oval(ex - eye_r, ey - eye_r, ex + eye_r, ey + eye_r, fill="white", outline=line,
-                           width=1, tags=tags)
-        py = ey + (0.05 * r if mood != "wow" else -0.04 * r)
-        canvas.create_oval(ex - pupil_r, py - pupil_r, ex + pupil_r, py + pupil_r, fill=INK, outline="", tags=tags)
-        canvas.create_oval(ex - 0.04 * r, py - 0.07 * r, ex + 0.03 * r, py, fill="white", outline="", tags=tags)
-    # Baeckchen
-    for dx in (-0.62 * r, 0.62 * r):
-        cy = face_y + 0.18 * r
-        canvas.create_oval(x + dx - 0.13 * r, cy - 0.08 * r, x + dx + 0.13 * r, cy + 0.08 * r,
-                           fill=shade(fill, -0.15), outline="", tags=tags)
-    # Mund
-    my = face_y + 0.22 * r
-    if mood == "wow":
-        canvas.create_oval(x - 0.1 * r, my - 0.04 * r, x + 0.1 * r, my + 0.2 * r, fill=INK, outline="", tags=tags)
-    elif mood == "happy":
-        canvas.create_arc(x - 0.3 * r, my - 0.22 * r, x + 0.3 * r, my + 0.28 * r, start=180, extent=180,
-                          fill=INK, outline=INK, style=tk.CHORD, tags=tags)
-    else:
-        canvas.create_arc(x - 0.22 * r, my - 0.16 * r, x + 0.22 * r, my + 0.16 * r, start=200, extent=140,
-                          style=tk.ARC, outline=INK, width=max(1, round(r / 12)), tags=tags)
 
 
 class ScaleDrawing:

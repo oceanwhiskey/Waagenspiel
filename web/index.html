@@ -25,8 +25,12 @@
       <h2>Zeit</h2>
       <div id="wahl-zeit" class="chips" role="radiogroup" aria-label="Zeit"></div>
       <p id="rekord" class="note"></p>
+      <p id="weltrekord" class="note world-note"></p>
       <button id="los" class="big good">Los geht's!</button>
-      <button id="ton" class="link" type="button"></button>
+      <div class="links">
+        <button id="zur-bestenliste" class="link" type="button">Bestenliste</button>
+        <button id="ton" class="link" type="button"></button>
+      </div>
       <p id="laden" class="note"></p>
     </section>
 
@@ -43,18 +47,29 @@
       <div id="stufe" class="level"></div>
       <svg id="feld" viewBox="0 0 360 476" preserveAspectRatio="xMidYMid meet" aria-label="Waagen"></svg>
       <p id="nachricht" class="message" aria-live="polite"></p>
+      <!-- Erklaerung (Ueben): im Ablauf, damit die Waagen sichtbar bleiben -->
+      <aside id="blatt" class="sheet" hidden>
+        <button id="blatt-kopf" class="sheet-head" type="button" aria-expanded="true">
+          <span id="blatt-titel"></span><span class="chevron" aria-hidden="true">▾</span>
+        </button>
+        <ul id="blatt-text"></ul>
+        <div class="sheet-buttons">
+          <button id="blatt-mehr" class="small gold">Nächster Tipp</button>
+          <button id="blatt-ok" class="small good">OK</button>
+        </div>
+      </aside>
       <div id="karten" class="cards"></div>
     </section>
 
-    <!-- Erklaerung (Ueben) -->
-    <aside id="blatt" class="sheet" hidden>
-      <h3 id="blatt-titel"></h3>
-      <ul id="blatt-text"></ul>
-      <div class="sheet-buttons">
-        <button id="blatt-mehr" class="small gold">Nächster Tipp</button>
-        <button id="blatt-ok" class="small good">OK</button>
-      </div>
-    </aside>
+    <!-- Bestenliste -->
+    <section id="bestenliste" class="screen" hidden>
+      <h1>Bestenliste</h1>
+      <p class="sub">Je Schwierigkeit und Zeit gibt es einen Rekord. Wer ihn bricht, darf sich eintragen.</p>
+      <div id="liste-zeit" class="chips" role="radiogroup" aria-label="Zeit"></div>
+      <table id="liste" class="stats board"></table>
+      <p id="liste-status" class="note"></p>
+      <button id="liste-zurueck" class="big blue">Zurück</button>
+    </section>
 
     <!-- Auswertung -->
     <section id="ende" class="screen" hidden>
@@ -67,6 +82,17 @@
         <tr><td>Beste Serie</td><td id="e-serie"></td></tr>
         <tr><td>Punkte</td><td id="e-punkte" class="points"></td></tr>
       </table>
+      <div id="welt" class="world" hidden>
+        <p id="welt-text"></p>
+        <form id="welt-form" hidden>
+          <label for="welt-name">Dein Name für die Bestenliste</label>
+          <div class="name-row">
+            <input id="welt-name" maxlength="20" autocomplete="nickname" enterkeyhint="send" required>
+            <button id="welt-senden" class="small good" type="submit">Eintragen</button>
+          </div>
+          <p id="welt-fehler" class="bad-text"></p>
+        </form>
+      </div>
       <div id="ende-figuren" class="row-figures"></div>
       <div class="end-buttons">
         <button id="nochmal" class="big good">Nochmal</button>

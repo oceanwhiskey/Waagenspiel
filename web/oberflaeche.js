@@ -11,7 +11,8 @@ import {
   pickCharacters,
   stepsFor,
 } from "./spiel.js";
-import { ScaleDrawing, animateTilt, character, characterIcon, el } from "./figuren.js";
+import { ScaleDrawing, animateTilt, character, characterIcon } from "./figuren.js";
+import { GlobalBoard, beatsRecord, validName } from "./bestenliste.js";
 
 const $ = (id) => document.getElementById(id);
 const SPOTS = [[118, 40], [242, 200], [118, 360]]; // oben links, Mitte rechts, unten links
@@ -66,8 +67,10 @@ class Sound {
 // --- Fenster ----------------------------------------------------------------------
 
 class App {
-  constructor({ makeSession, highscores, sound }) {
-    Object.assign(this, { makeSession, highscores, sound });
+  constructor({ makeSession, highscores, sound, board }) {
+    Object.assign(this, { makeSession, highscores, sound, board });
+    this.records = null; // globale Rekorde, sobald geladen
+    this.boardTime = 60;
     const savedLevel = store.getItem("waagenspiel.stufe");
     this.difficulty = savedLevel in DIFFICULTIES ? savedLevel : "Steigend";
     const savedTime = store.getItem("waagenspiel.zeit");
@@ -95,7 +98,7 @@ class App {
   }
 
   show(id) {
-    for (const s of ["start", "spiel", "ende"]) $(s).hidden = s !== id;
+    for (const s of ["start", "spiel", "ende", "bestenliste"]) $(s).hidden = s !== id;
     $("blatt").hidden = true;
   }
 
@@ -107,13 +110,21 @@ class App {
     $("tipp").onclick = () => this.showHint();
     $("blatt-mehr").onclick = () => this.showHint();
     $("blatt-ok").onclick = () => this.closeSheet();
+    $("blatt-kopf").onclick = () => {
+      const closed = $("blatt").classList.toggle("zu");
+      $("blatt-kopf").setAttribute("aria-expanded", String(!closed));
+    };
     $("ton").onclick = () => { this.sound.toggle(); this.updateSoundLabel(); };
+    $("zur-bestenliste").onclick = () => this.showBoard();
+    $("liste-zurueck").onclick = () => this.showStart();
+    $("welt-form").onsubmit = (e) => { e.preventDefault(); this.submitRecord(); };
     document.addEventListener("keydown", (e) => this.onKey(e));
   }
 
   onKey(e) {
+    if (e.target instanceof HTMLInputElement) return; // Namensfeld: Tasten gehoeren dem Feld
     const key = e.key.toLowerCase();
-    if (key === "escape") return this.leave();
+    if (key === "escape") return $("bestenliste").hidden ? this.leave() : this.showStart();
     if (!$("start").hidden && key === "enter") return this.startGame();
     if (!$("ende").hidden && key === "enter") return this.startGame();
     if (["1", "2", "3", "4"].includes(key) && this.accepting) return this.choose(Number(key) - 1);
@@ -141,6 +152,7 @@ class App {
     this.updateRecord();
     this.updateSoundLabel();
     this.drawLogo();
+    this.loadRecords().then(() => this.updateRecord());
   }
 
   chips(id, values, label, selected, onSelect) {
@@ -165,7 +177,108 @@ class App {
     const best = this.highscores.get(Highscores.key(this.difficulty, this.timeLimit));
     $("rekord").textContent = this.timeLimit == null
       ? "Üben: ohne Uhr, mit Tipps und Erklärungen"
-      : best ? `Rekord: ${best} Punkte` : "Noch kein Rekord – stell den ersten auf!";
+      : best ? `Dein Rekord: ${best} Punkte` : "Noch kein eigener Rekord – stell den ersten auf!";
+    const world = this.timeLimit == null ? null : this.records?.[Highscores.key(this.difficulty, this.timeLimit)];
+    $("weltrekord").textContent = this.timeLimit == null || !this.records ? ""
+      : world ? `Bestenliste: ${world.name} mit ${world.punkte} Punkten` : "Bestenliste: noch frei – sei die oder der Erste!";
+  }
+
+  // --- Globale Bestenliste ------------------------------------------------------------
+
+  async loadRecords() {
+    try {
+      this.records = await this.board.records();
+    } catch {
+      this.records = null; // ohne Netz geht es eben ohne Bestenliste
+    }
+    return this.records;
+  }
+
+  showBoard() {
+    this.clearTimers();
+    this.session = null;
+    this.show("bestenliste");
+    this.chips("liste-zeit", TIMES.filter(Boolean), (t) => `${t} s`, this.boardTime, (t) => {
+      this.boardTime = t;
+      this.renderBoard();
+    });
+    $("liste-status").textContent = "wird geladen …";
+    this.renderBoard();
+    this.loadRecords().then(() => this.renderBoard());
+  }
+
+  renderBoard() {
+    const table = $("liste");
+    $("liste-status").textContent = this.records ? "" : "Die Bestenliste ist gerade nicht erreichbar.";
+    table.replaceChildren(...Object.keys(DIFFICULTIES).map((difficulty) => {
+      const row = document.createElement("tr");
+      const name = document.createElement("td");
+      name.textContent = difficulty;
+      const cell = document.createElement("td");
+      const record = this.records?.[Highscores.key(difficulty, this.boardTime)];
+      if (record) {
+        const who = document.createElement("span");
+        who.className = "who";
+        who.textContent = record.name;
+        const when = document.createElement("span");
+        when.className = "when";
+        when.textContent = new Date(record.datum).toLocaleDateString("de-DE");
+        cell.append(`${record.punkte}`, who, when);
+      } else {
+        const empty = document.createElement("span");
+        empty.className = "empty";
+        empty.textContent = this.records ? "noch frei" : "–";
+        cell.append(empty);
+      }
+      row.append(name, cell);
+      return row;
+    }));
+  }
+
+  async offerRecord(key, points, token) {
+    const box = $("welt");
+    $("welt-form").hidden = true;
+    $("welt-fehler").textContent = "";
+    if (!points || !token) return;
+    const records = await this.loadRecords();
+    if (!records || $("ende").hidden) return;
+    const record = records[key];
+    box.hidden = false;
+    if (beatsRecord(points, record)) {
+      $("welt-text").textContent = record
+        ? `Neuer Rekord in der Bestenliste! Bisher: ${record.name} mit ${record.punkte}.`
+        : "Du bist die oder der Erste in dieser Kategorie!";
+      $("welt-form").hidden = false;
+      this.pending = { key, points, token };
+      $("welt-name").value = store.getItem("waagenspiel.name") || "";
+      $("welt-name").focus();
+    } else {
+      $("welt-text").textContent = `Rekord in der Bestenliste: ${record.name} mit ${record.punkte} Punkten.`;
+    }
+  }
+
+  async submitRecord() {
+    const pending = this.pending;
+    if (!pending) return;
+    const name = validName($("welt-name").value);
+    if (!name) {
+      $("welt-fehler").textContent = "Bitte 1 bis 20 Zeichen: Buchstaben, Ziffern, Leerzeichen, . _ - ! ?";
+      return;
+    }
+    $("welt-senden").disabled = true;
+    try {
+      this.records = await this.board.submit(pending.token, pending.key, pending.points, name);
+      store.setItem("waagenspiel.name", name);
+      this.pending = null;
+      $("welt-form").hidden = true;
+      $("welt-text").textContent = `Eingetragen: ${name} mit ${pending.points} Punkten. Glückwunsch!`;
+      this.confetti();
+    } catch (error) {
+      $("welt-fehler").textContent = error.message;
+      if (error.records) this.records = error.records;
+    } finally {
+      $("welt-senden").disabled = false;
+    }
   }
 
   updateSoundLabel() {
@@ -178,7 +291,7 @@ class App {
     const drawing = new ScaleDrawing(svg, 180, 30, { number: 0, left: [0, 1], right: [2, 3, 0], tilt: 0 },
       this.preview, { showNumber: false });
     this.preview.forEach((ch, i) => {
-      const fig = character(ch, 22, "happy");
+      const fig = character(ch, 22);
       const [x, y] = [[36, 140], [92, 146], [268, 146], [324, 140]][i];
       fig.setAttribute("transform", `translate(${x},${y})`);
       svg.appendChild(fig);
@@ -204,6 +317,11 @@ class App {
     $("uhr").hidden = practice;
     $("zeitbalken").hidden = practice;
     this.drawCards();
+    this.token = null;
+    if (!practice) {
+      const key = Highscores.key(this.difficulty, this.timeLimit);
+      this.board.start(key).then((token) => (this.token = token)).catch(() => {});
+    }
     this.session.start();
     this.showRound();
     if (!practice) this.tick();
@@ -260,11 +378,8 @@ class App {
     });
   }
 
-  resetCards(moodFor = () => "calm") {
-    this.cards.forEach((card, i) => {
-      card.className = "card";
-      card.querySelector("svg").replaceWith(characterIcon(this.session.characters[i], moodFor(i)));
-    });
+  resetCards() {
+    this.cards.forEach((card) => (card.className = "card"));
   }
 
   showRound() {
@@ -273,6 +388,7 @@ class App {
     this.updateHeader();
     this.resetCards();
     $("blatt").hidden = true;
+    $("karten").hidden = false;
     const msg = $("nachricht");
     msg.className = "message";
     msg.textContent = "Welche Figur ist am schwersten?";
@@ -294,7 +410,7 @@ class App {
   }
 
   celebrate(choice, feedback) {
-    this.resetCards((i) => (i === choice ? "happy" : "calm"));
+    this.resetCards();
     this.cards[choice].classList.add("richtig");
     this.drawings.forEach((d) => d.mark(choice, "richtig"));
     let text = `Richtig!  +${feedback.points}`;
@@ -325,7 +441,7 @@ class App {
 
   reveal(choice, feedback) {
     const s = this.session;
-    this.resetCards((i) => (i === choice ? "wow" : "calm"));
+    this.resetCards();
     this.cards[choice].classList.add("falsch");
     this.cards[feedback.answer].classList.add("loesung");
     this.drawings.forEach((d) => d.mark(feedback.answer, "loesung"));
@@ -338,6 +454,7 @@ class App {
     msg.textContent = `Leider nicht – ${right} ist am schwersten.`;
     if (s.isPractice) {
       const lines = stepsFor(this.round, choice).flatMap((step) => step.text);
+      $("karten").hidden = true; // Antwort steht fest: Platz fuer Erklaerung und Waagen
       this.openSheet(`Warum ist ${wrong} leichter als ${right}?`, lines, { more: false, ok: "Weiter" });
       this.afterSheet = () => this.nextRound();
     } else {
@@ -369,8 +486,10 @@ class App {
     }));
     $("blatt-mehr").hidden = !more;
     $("blatt-ok").textContent = ok;
+    $("blatt").classList.remove("zu");
+    $("blatt-kopf").setAttribute("aria-expanded", "true");
     $("blatt").hidden = false;
-    $("blatt").scrollTop = 0;
+    list.scrollTop = 0;
   }
 
   closeSheet() {
@@ -402,15 +521,18 @@ class App {
     this.accepting = false;
     this.show("ende");
     $("ende-titel").textContent = s.isPractice ? "Gut geübt!" : s.isOver() ? "Zeit ist um!" : "Spiel beendet";
-    $("ende-rekord").textContent = record ? "★ Neuer Rekord! ★" : oldBest ? `Rekord: ${oldBest} Punkte` : "";
+    $("ende-rekord").textContent = record ? "★ Neuer eigener Rekord! ★" : oldBest ? `Dein Rekord: ${oldBest} Punkte` : "";
     $("e-runden").textContent = result.rounds;
     $("e-richtig").textContent = result.correct;
     $("e-falsch").textContent = result.wrong;
     $("e-serie").textContent = result.bestStreak;
     $("e-punkte").textContent = result.points;
-    const mood = result.correct >= result.wrong ? "happy" : "wow";
-    $("ende-figuren").replaceChildren(...this.preview.map((ch) => characterIcon(ch, mood)));
+    $("ende-figuren").replaceChildren(...this.preview.map((ch) => characterIcon(ch)));
     if (record) this.confetti();
+    $("welt").hidden = true;
+    this.pending = null;
+    // Nur volle Partien auf Zeit kommen in die Bestenliste
+    if (!s.isPractice && s.isOver()) this.offerRecord(key, result.points, this.token);
   }
 
   confetti() {
@@ -448,6 +570,7 @@ async function main() {
       new GameSession({ source, difficulty: DIFFICULTIES[difficulty](), timeLimit, characters }),
     highscores: new Highscores(store),
     sound: new Sound(store),
+    board: new GlobalBoard(),
   });
   window.waagenspiel = app; // fuer Tests im Browser
   button.disabled = false;

@@ -38,6 +38,7 @@ Spiellogik laufen unter <http://localhost:8000/tests.html>.
 | `oberflaeche.js` | Bildschirme, Eingaben, Animationen; bekommt die Partie von außen |
 | `raetsel.json` | 1 600 Rätsel (400 je Stufe) mit Lösungsschritten, erzeugt mit `python webversion.py` |
 | `spiel.css` | Aussehen |
+| `bestenliste.js`, `bestenliste.php` | Globale Bestenliste (Browser und Server) |
 | `sw.js`, `manifest.webmanifest`, `icon*` | Installierbar und offline spielbar; der Service Worker speichert nur die Spieldateien |
 
 Die Rätsel stammen aus dem exakt geprüften Katalog: Jedes hat genau eine
@@ -45,5 +46,22 @@ schwerste Figur, und jede Waage wird gebraucht. Im Browser läuft kein Löser,
 deshalb sind die Lösungsschritte vorberechnet. Mehr Rätsel je Stufe:
 `python webversion.py --je-stufe 800`.
 
-Bestenliste und Einstellungen liegen nur im Browser des Geräts
-(`localStorage`). Es werden keine Daten übertragen.
+## Bestenliste
+
+Eigene Rekorde und Einstellungen liegen nur im Browser des Geräts
+(`localStorage`). Dazu kommt eine **globale Bestenliste** (`bestenliste.php`,
+`bestenliste.js`): Je Schwierigkeit und Zeit gibt es einen Rekord, und wer ihn
+in einer vollen Partie auf Zeit bricht, darf sich mit einem Namen eintragen.
+Übertragen werden nur Kategorie, Punkte und dieser Name.
+
+- Braucht PHP (ab 7.4) und Schreibrechte im Ordner der Seite. Beim ersten
+  Aufruf legt `bestenliste.php` den Ordner `bestenliste-daten/` an, sperrt ihn
+  per `.htaccess` und erzeugt dort einen geheimen Schlüssel (`geheim.txt`).
+  Der Schlüssel steht deshalb in keinem Repository.
+- Schutz gegen einfaches Schummeln: Beim Spielstart gibt es eine signierte
+  Spielmarke. Der Server nimmt sie erst nach Ablauf der Spielzeit an, nur
+  einmal und nur mit glaubwürdigen Punkten (höchstens 60 je Sekunde). Wer es
+  darauf anlegt, kann im Browser trotzdem schummeln.
+- Zurücksetzen: `bestenliste-daten/daten.json` löschen. Einen einzelnen
+  Eintrag entfernen: in dieser Datei den Eintrag der Kategorie löschen.
+- Ohne PHP läuft das Spiel ganz normal, nur ohne globale Bestenliste.

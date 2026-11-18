@@ -17,6 +17,7 @@
       FixedDifficulty, GameSession, Highscores, RisingDifficulty, RoundSource, explain, makeRound,
       panItems, panPositions, parseScale, pickCharacters, pointsFor, scaleView, seededRandom, stepsFor,
     } from "./spiel.js";
+    import { GlobalBoard, beatsRecord, validName } from "./bestenliste.js";
 
     const results = [];
     const test = async (name, fn) => {
@@ -119,6 +120,29 @@
       eq(round.hints.length, round.steps.length + 1);
       const text = round.hints[0].map((line) => explain(line, round, ch)).join(" ");
       ok(text.includes(`also ist es ${ch[round.answer].name}.`), text);
+    });
+
+    await test("Bestenliste: nur ein echter neuer Rekord zaehlt, Namen werden geprueft", () => {
+      ok(beatsRecord(10, undefined) && beatsRecord(11, { punkte: 10 }));
+      ok(!beatsRecord(10, { punkte: 10 }) && !beatsRecord(0, undefined));
+      eq(validName("  Jörg   Ä. "), "Jörg Ä.");
+      eq(validName("<b>x</b>"), null);
+      eq(validName(""), null);
+      eq(validName("x".repeat(21)), null);
+    });
+
+    await test("Bestenliste: Serverfehler kommen als Meldung an", async () => {
+      const fake = async () => ({ json: async () => ({ ok: false, fehler: "Kein neuer Rekord", rekorde: { "Mittel/30s": { punkte: 5 } } }) });
+      const board = new GlobalBoard("x", fake);
+      try {
+        await board.submit("t", "Mittel/30s", 3, "A");
+        ok(false, "kein Fehler");
+      } catch (e) {
+        eq(e.message, "Kein neuer Rekord");
+        eq(e.records["Mittel/30s"].punkte, 5);
+      }
+      const offline = new GlobalBoard("x", async () => ({ json: async () => { throw new Error("kein JSON"); } }));
+      try { await offline.records(); ok(false); } catch (e) { ok(e.message.includes("nicht erreichbar")); }
     });
 
     await test("Waagennummern folgen dem Mischen", () => {

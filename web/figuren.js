@@ -5,7 +5,6 @@ import { panPositions } from "./spiel.js";
 const NS = "http://www.w3.org/2000/svg";
 export const BRASS = "#e0a526";
 export const BRASS_DARK = "#9c6b00";
-const INK = "#2b2d42";
 
 export function el(name, attrs = {}, parent = null) {
   const node = document.createElementNS(NS, name);
@@ -36,55 +35,35 @@ function roundedPolygon(points, t = 0.22) {
   return d + "Z";
 }
 
-/** Eine Figur mit Gesicht, Mittelpunkt (0, 0), Radius r. mood: calm | happy | wow */
-export function character(ch, r, mood = "calm") {
+/** Eine Figur: schlichte Form mit dunklerem Rand, Mittelpunkt (0, 0), Radius r. */
+export function character(ch, r) {
   const g = el("g", { class: "figur" });
-  const line = shade(ch.color, -0.4);
-  const common = { fill: ch.color, stroke: line, "stroke-width": Math.max(1.5, r / 10) };
-  let faceY = 0;
+  const common = {
+    fill: ch.color,
+    stroke: shade(ch.color, -0.35),
+    "stroke-width": Math.max(1.5, r / 9),
+    "stroke-linejoin": "round",
+  };
   if (ch.shape === "kreis") {
     el("circle", { r, ...common }, g);
   } else if (ch.shape === "quadrat") {
-    el("rect", { x: -0.92 * r, y: -0.92 * r, width: 1.84 * r, height: 1.84 * r, rx: 0.45 * r, ...common }, g);
+    el("rect", { x: -0.9 * r, y: -0.9 * r, width: 1.8 * r, height: 1.8 * r, rx: 0.3 * r, ...common }, g);
   } else if (ch.shape === "dreieck") {
-    el("path", { d: roundedPolygon([[0, -1.2 * r], [1.15 * r, 0.92 * r], [-1.15 * r, 0.92 * r]], 0.2), ...common }, g);
-    faceY = 0.3 * r;
+    el("path", { d: roundedPolygon([[0, -1.15 * r], [1.12 * r, 0.9 * r], [-1.12 * r, 0.9 * r]], 0.12), ...common }, g);
   } else {
     const k = 0.88 * r;
     el("path", {
       d: `M0,${-1.22 * r} C${0.3 * r},${-0.75 * r} ${k},${-0.4 * r} ${k},${0.2 * r} A${k} ${k} 0 0 1 ${-k},${0.2 * r} C${-k},${-0.4 * r} ${-0.3 * r},${-0.75 * r} 0,${-1.22 * r} Z`,
       ...common,
     }, g);
-    faceY = 0.22 * r;
-  }
-  for (const dx of [-0.36 * r, 0.36 * r]) {
-    const ey = faceY - 0.15 * r;
-    el("circle", { cx: dx, cy: ey, r: 0.24 * r, fill: "white", stroke: line, "stroke-width": Math.max(0.8, r / 30) }, g);
-    const py = ey + (mood === "wow" ? -0.04 * r : 0.05 * r);
-    el("circle", { cx: dx, cy: py, r: 0.12 * r, fill: INK }, g);
-    el("circle", { cx: dx - 0.03 * r, cy: py - 0.04 * r, r: 0.04 * r, fill: "white" }, g);
-  }
-  for (const dx of [-0.62 * r, 0.62 * r]) {
-    el("ellipse", { cx: dx, cy: faceY + 0.18 * r, rx: 0.13 * r, ry: 0.08 * r, fill: shade(ch.color, -0.15) }, g);
-  }
-  const my = faceY + 0.22 * r;
-  if (mood === "happy") {
-    el("path", { d: `M${-0.3 * r},${my} A${0.3 * r} ${0.26 * r} 0 0 0 ${0.3 * r},${my} Z`, fill: INK }, g);
-  } else if (mood === "wow") {
-    el("ellipse", { cx: 0, cy: my + 0.08 * r, rx: 0.1 * r, ry: 0.12 * r, fill: INK }, g);
-  } else {
-    el("path", {
-      d: `M${-0.22 * r},${my} Q0,${my + 0.2 * r} ${0.22 * r},${my}`,
-      fill: "none", stroke: INK, "stroke-width": Math.max(1.2, r / 12), "stroke-linecap": "round",
-    }, g);
   }
   return g;
 }
 
 /** SVG-Element (eigene Leinwand) mit einer Figur, z. B. fuer Antwortknoepfe. */
-export function characterIcon(ch, mood = "calm") {
+export function characterIcon(ch) {
   const svg = el("svg", { viewBox: "-40 -40 80 80", class: "figur-icon", "aria-hidden": "true" });
-  svg.appendChild(character(ch, 30, mood));
+  svg.appendChild(character(ch, 30));
   return svg;
 }
 
