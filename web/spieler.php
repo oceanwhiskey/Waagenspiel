@@ -42,10 +42,10 @@ switch ($aktion) {
         $stmt = $pdo->prepare('SELECT COUNT(*) FROM ' . t('spieler') . ' WHERE erstellt > ?');
         $stmt->execute([gmdate('Y-m-d H:i:s', time() - 3600)]);
         if ((int) $stmt->fetchColumn() >= NEUE_NAMEN_JE_STUNDE) {
-            fehler('Gerade werden sehr viele Namen angelegt. Bitte spaeter noch einmal.', 429);
+            fehler('Gerade werden sehr viele Namen angelegt. Bitte später noch einmal.', 429);
         }
         if (!name_frei($name)) {
-            fehler('Diesen Namen gibt es schon. Bitte einen anderen waehlen.', 409);
+            fehler('Diesen Namen gibt es schon. Bitte einen anderen wählen.', 409);
         }
         try {
             $pdo->beginTransaction();
@@ -55,7 +55,7 @@ switch ($aktion) {
             $pdo->commit();
         } catch (PDOException $e) {
             $pdo->rollBack();
-            fehler('Diesen Namen gibt es schon. Bitte einen anderen waehlen.', 409);
+            fehler('Diesen Namen gibt es schon. Bitte einen anderen wählen.', 409);
         }
         antwort(['name' => $name, 'schluessel' => $schluessel]);
 
@@ -75,7 +75,7 @@ switch ($aktion) {
         $s = spieler_noetig();
         $name = name_pruefen(eingabe('name'));
         if (!name_frei($name, (int) $s['id'])) {
-            fehler('Diesen Namen gibt es schon. Bitte einen anderen waehlen.', 409);
+            fehler('Diesen Namen gibt es schon. Bitte einen anderen wählen.', 409);
         }
         $pdo->prepare('UPDATE ' . t('spieler') . ' SET name = ?, name_klein = ? WHERE id = ?')
             ->execute([$name, klein($name), $s['id']]);

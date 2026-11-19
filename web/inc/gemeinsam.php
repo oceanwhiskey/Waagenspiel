@@ -223,7 +223,7 @@ function spieler(): ?array {
 function spieler_noetig(): array {
     $spieler = spieler();
     if (!$spieler) {
-        fehler('Dieses Geraet hat keinen Spielernamen (mehr).', 401);
+        fehler('Dieses Gerät hat keinen Spielernamen (mehr).', 401);
     }
     return $spieler;
 }

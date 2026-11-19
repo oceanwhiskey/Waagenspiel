@@ -75,7 +75,7 @@ $spieler = spieler_noetig();
 $teile = explode('.', eingabe('marke'));
 $inhalt = count($teile) === 2 ? base64_decode($teile[0], true) : false;
 if ($inhalt === false || !hash_equals(hash_hmac('sha256', $inhalt, geheimnis()), $teile[1])) {
-    fehler('Ungueltige Spielmarke', 403);
+    fehler('Ungültige Spielmarke', 403);
 }
 [$marken_kategorie, $beginn] = explode('|', $inhalt) + ['', '0'];
 $alter = time() - (int) $beginn;
@@ -90,7 +90,7 @@ if ($alter > $sekunden + 900) {
 }
 $punkte = filter_var(eingabe('punkte'), FILTER_VALIDATE_INT);
 if ($punkte === false || $punkte < 1 || $punkte > $sekunden * PUNKTE_JE_SEKUNDE) {
-    fehler('Unglaubwuerdige Punktzahl');
+    fehler('Unglaubwürdige Punktzahl');
 }
 
 // --- Eintragen ---------------------------------------------------------------------------------
