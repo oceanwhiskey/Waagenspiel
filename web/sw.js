@@ -4,7 +4,7 @@
 const CACHE = "waagenspiel-v8";
 const FILES = [
   "./", "index.html", "spiel.css", "spiel.js", "figuren.js", "oberflaeche.js", "bestenliste.js", "raetsel.json",
-  "datenschutz.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png", "icon-180.png",
+  "datenschutz.html", "impressum.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png", "icon-180.png",
 ];
 const BASE = new URL("./", self.location).href;
 const GAME_URLS = new Set(FILES.map((file) => new URL(file, BASE).href));

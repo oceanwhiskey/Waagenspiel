@@ -79,6 +79,5 @@ zufälligen Schlüssel, der Server speichert nur dessen Hash.
   verschwinden mit).
 - Ohne PHP und Datenbank läuft das Spiel ganz normal, nur ohne Namen und
   Bestenliste.
-- `datenschutz.html` beschreibt, was gespeichert wird. `impressum-vorlage.html`
-  ist eine Vorlage: ausfüllen, als `impressum.html` speichern, hochladen und
-  auf der Startseite neben „Datenschutz“ verlinken.
+- `datenschutz.html` beschreibt, was gespeichert wird. `impressum.html`
+  enthält die Anbieterangaben.
