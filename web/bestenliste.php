@@ -62,6 +62,7 @@ $kategorie = eingabe('kategorie');
 $sekunden = kategorie_pruefen($kategorie);
 
 if ($aktion === 'start') {
+    spieler(); // mit Schluessel: zaehlt als Benutzung, der Name bleibt reserviert
     $inhalt = $kategorie . '|' . time() . '|' . bin2hex(random_bytes(8));
     antwort(['marke' => base64_encode($inhalt) . '.' . hash_hmac('sha256', $inhalt, geheimnis())]);
 }

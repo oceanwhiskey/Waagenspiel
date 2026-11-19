@@ -62,7 +62,9 @@ Eigene Rekorde und Einstellungen liegen nur im Browser des Geräts
 Schwierigkeit und Zeit (`spieler.php`, `bestenliste.php`, `inc/gemeinsam.php`,
 `bestenliste.js`; Konzept in `docs/04_konzept_mehrspieler.md`). Ein
 Spielername braucht kein Passwort und keine E-Mail: Das Gerät bekommt einen
-zufälligen Schlüssel, der Server speichert nur dessen Hash.
+zufälligen Schlüssel, der Server speichert nur dessen Hash. Ein Name ist
+einen Tag nach seiner letzten Benutzung wieder frei; dann kann ihn jedes Gerät
+nehmen (so wechselt man auch das Gerät).
 
 - Braucht PHP (ab 7.4) und eine MySQL-Datenbank. Die Zugangsdaten liegen in
   `waagenspiel-config/db.ini` **außerhalb** der Webseiten (die PHP-Dateien

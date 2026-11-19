@@ -14,7 +14,7 @@ Dienste. Alles läuft auf dem vorhandenen Webspace bei Biohost (PHP 7.4, MySQL
 
 | Funktion | Kurz |
 |---|---|
-| **Spielername** | Ein selbst gewählter Name, an das Gerät gebunden. Ohne Namen spielt man weiter wie bisher. |
+| **Spielername** | Ein selbst gewählter Name, an das Gerät gebunden, das ihn zuletzt benutzt hat; nach einem Tag Pause wieder frei. Ohne Namen spielt man weiter wie bisher. |
 | **Tagesrätsel** | Jeden Tag dieselben Rätsel für alle, eine Tagesliste. |
 | **Duell** | Ich spiele eine Partie, schicke einen Link, der andere spielt *dieselben* Rätsel. Wer mehr Punkte hat, gewinnt. |
 | **Bestenliste** | Wie heute, aber Einträge gehören zu Spielernamen statt zu frei getippten Namen. |
@@ -40,18 +40,18 @@ Es gibt kein Passwort und keine E-Mail-Adresse. Das Gerät ist der Ausweis.
    `X-Waagenspiel-Schluessel`. (`Authorization` würde Apache bei manchen
    PHP-Einstellungen verschlucken.) Ein Cookie gibt es nicht; damit können
    fremde Seiten auch keine Aufrufe unterschieben.
-4. **Auf ein anderes Gerät übertragen**: Unter „Spielername“ erzeugt man
-   einen Übertragungscode, z. B. `WAAGE-7KQ2-M9XD`. Auf dem neuen Gerät
-   eingegeben, bekommt es einen eigenen Geräteschlüssel für denselben Namen.
-   Der Code gilt 10 Minuten und nur einmal. Gegen Durchprobieren: Nach 50
-   falschen Codes in 10 Minuten nimmt der Server eine Weile keine mehr an.
-5. **Mehrere Geräte** dürfen denselben Namen nutzen. Unter „Mein Name“ sieht
-   man sie (nur „Gerät seit 18.11.“, ohne weitere Angaben) und kann einzelne
-   abmelden.
-6. **Gehen die Browserdaten verloren** und es gibt kein zweites Gerät, ist der
-   Name nicht mehr nutzbar. Man legt einen neuen an. Meldet man das letzte
-   Gerät selbst ab, wird der Name samt Ergebnissen gelöscht. (Ungenutzte Namen
-   nach einem Jahr freizugeben ist noch nicht umgesetzt.)
+4. **Ein Name ist einen Tag lang gesperrt.** Er gehört dem Gerät, das ihn
+   zuletzt benutzt hat (Name genommen, Partie gestartet oder eingetragen,
+   Namensblatt geöffnet). Nach einem Tag ohne Benutzung ist er wieder frei.
+   Wer ihn dann eingibt, bekommt ihn samt seinen Ergebnissen; die bisherigen
+   Geräte verlieren ihn. So wechselt man das Gerät: einfach am nächsten Tag
+   denselben Namen eingeben. Einen Übertragungscode gibt es nicht mehr
+   (war zuerst umgesetzt, erschien aber zu umständlich).
+5. **Ein anderer Name**: Gibt man auf dem Namensblatt einen anderen Namen
+   ein, lässt das Gerät den alten los. Der alte Name bleibt mit seinen
+   Ergebnissen stehen und ist nach einem Tag frei.
+6. **Auf diesem Gerät abmelden**: Das Gerät vergisst den Namen; der Name
+   bleibt mit seinen Ergebnissen bestehen und ist nach einem Tag frei.
 7. **Name löschen** geht mit einem Knopf: Name, Geräteschlüssel und alle
    Ergebnisse verschwinden (in fremden Duellen erscheint dann „gelöscht“).
 
@@ -139,10 +139,8 @@ beim ersten Aufruf an):
 ```text
 spieler       id, name, name_klein (eindeutig), erstellt, zuletzt
 geraet        id, spieler_id, schluessel_hash (eindeutig), erstellt, zuletzt
-uebertragung  code_hash, spieler_id, ablauf
 ergebnis      spieler_id, kategorie, punkte, erreicht   (bestes je Kategorie)
 marke         kennung, benutzt                          (eingelöste Spielmarken)
-fehlversuch   id, art, zeit                             (gegen Durchprobieren)
 einstellung   schluessel, wert                          (Geheimnis für Spielmarken)
 ```
 
@@ -166,15 +164,14 @@ JSON-Datei kann danach entfallen.
 
 | Aufruf | Zweck |
 |---|---|
-| `spieler.php` `anlegen` (name) | Namen wählen, liefert Geräteschlüssel |
-| `spieler.php` `ich`, `umbenennen`, `geraete`, `geraet_abmelden`, `loeschen` | Name verwalten |
-| `spieler.php` `code_erzeugen`, `code_einloesen` | auf anderes Gerät übertragen |
+| `spieler.php` `nehmen` (name) | neuen oder seit einem Tag freien Namen nehmen, liefert Geräteschlüssel; vergeben: 409 mit `frei_ab` |
+| `spieler.php` `ich`, `abmelden`, `loeschen` | Name verwalten |
 | `partie.php` `start` (art, stufe, zeit, code) | Partie oder Duell beginnen, liefert erstes Rätsel |
 | `partie.php` `antwort` (teilnahme, nr, wahl) | prüft, liefert Punkte, Lösung und nächstes Rätsel |
 | `partie.php` `ergebnis` (code) | Ergebnisseite eines Duells oder Tagesrätsels |
 | `listen.php` `bestenliste`, `tag`, `meine_duelle` | Listen |
 
-Alle Aufrufe außer `anlegen`, `code_einloesen` und den öffentlichen Listen
+Alle Aufrufe außer `nehmen` und den öffentlichen Listen
 brauchen den Geräteschlüssel. Höchstens 30 neue Namen pro Stunde und
 Server, damit niemand die Datenbank vollschreibt.
 
@@ -187,12 +184,11 @@ Startseite (Ergänzungen fett):
   [Schwierigkeit]  [Zeit]
   [ Los geht's! ]
   [ Tagesrätsel ]  [ Herausfordern ]
-  Bestenliste · Ton: an · **Spielername wählen** (bzw. **Ingo ▾**: Meine Duelle,
-                                                   Auf anderes Gerät, Name löschen)
+  Bestenliste · Ton: an · **Spielername wählen** (bzw. **Spielername: Ingo**)
 ```
 
-- **Spielername wählen**: ein Feld, ein Knopf, darunter klein „Schon einen
-  Namen auf einem anderen Gerät? Code eingeben“.
+- **Spielername wählen**: ein Feld, ein Knopf. Mit Namen dazu „Auf diesem
+  Gerät abmelden“ und „Name löschen“.
 - **Herausfordern**: startet sofort eine Partie mit den gewählten
   Einstellungen; am Ende „Link teilen“.
 - **Duell-Link öffnen**: „Ingo fordert dich heraus: Profi, 60 s. Annehmen?“
@@ -218,7 +214,7 @@ funktionieren weiter offline.
 ## 9. Umsetzung in Schritten
 
 1. **Spielername und Bestenliste mit Namen.** Datenbank anlegen,
-   `spieler.php`, Namensblatt, Übertragung per Code, Bestenliste auf
+   `spieler.php`, Namensblatt, Name einen Tag gesperrt, Bestenliste auf
    Spielernamen umstellen, Datenschutzhinweis und Impressum.
 2. **Server teilt Rätsel aus.** `raetsel`-Tabelle befüllen, `partie.php`
    für Partien auf Zeit mit Namen; Punkte rechnet der Server.

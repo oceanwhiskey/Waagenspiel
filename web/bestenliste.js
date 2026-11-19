@@ -1,8 +1,10 @@
 // Verbindung zu spieler.php und bestenliste.php. Keine Oberflaeche.
 //
 // Spielername ohne Passwort und E-Mail (docs/04, Abschnitt 2): Der Server gibt
-// beim Anlegen einen zufaelligen Geraeteschluessel heraus. Er liegt nur hier im
-// Browser (storage) und geht mit jedem Aufruf im Kopf X-Waagenspiel-Schluessel mit.
+// beim Nehmen eines Namens einen zufaelligen Geraeteschluessel heraus. Er liegt nur
+// hier im Browser (storage) und geht mit jedem Aufruf im Kopf
+// X-Waagenspiel-Schluessel mit. Ein Name ist nach einem Tag ohne Benutzung wieder
+// frei und kann dann von jedem Geraet genommen werden.
 
 const KEY = "waagenspiel.schluessel";
 const NAME = "waagenspiel.spielername";
@@ -22,6 +24,7 @@ async function request(fetchFn, url, body, key) {
   if (!data.ok) {
     const error = new Error(data.fehler || "Unbekannter Fehler");
     error.status = response.status;
+    error.data = data;
     throw error;
   }
   return data;
@@ -61,44 +64,27 @@ export class PlayerAccount {
     }
   }
 
-  async create(name) {
-    const data = await this.call("anlegen", { name });
+  /**
+   * Nimmt einen Namen: neu, oder einen, der seit einem Tag nicht benutzt wurde.
+   * Ist er vergeben, kommt ein Fehler mit status 409 und data.frei_ab (ISO-Zeit).
+   */
+  async take(name) {
+    const data = await this.call("nehmen", { name });
     this.remember(data.name, data.schluessel);
     return data.name;
   }
 
-  async redeem(code) {
-    const data = await this.call("code_einloesen", { code });
-    this.remember(data.name, data.schluessel);
-    return data.name;
-  }
-
-  /** {name, erstellt, geraete: [{id, erstellt, zuletzt, dieses}]} */
+  /** {name} */
   async me() {
     const data = await this.call("ich");
     this.remember(data.name);
     return data;
   }
 
-  async rename(name) {
-    const data = await this.call("umbenennen", { name });
-    this.remember(data.name);
-    return data.name;
-  }
-
-  async transferCode() {
-    return this.call("code_erzeugen"); // {code, gueltig_s}
-  }
-
-  async logoutDevice(id) {
-    await this.call("geraet_abmelden", { id });
-  }
-
-  /** Dieses Geraet abmelden; liefert true, wenn damit der Name ganz geloescht ist. */
+  /** Dieses Geraet abmelden; der Name bleibt mit seinen Ergebnissen bestehen. */
   async logout() {
-    const data = await this.call("abmelden");
+    await this.call("abmelden");
     this.forget();
-    return data.name_geloescht;
   }
 
   async remove() {
@@ -120,7 +106,7 @@ export class GlobalBoard {
 
   /** Marke fuer eine Partie, beim Start holen. */
   async start(category) {
-    return (await request(this.fetchFn, this.url, { aktion: "start", kategorie: category })).marke;
+    return (await request(this.fetchFn, this.url, { aktion: "start", kategorie: category }, this.account?.key)).marke;
   }
 
   /** Ergebnis eintragen: {platz, verbessert, bestes, liste}. */

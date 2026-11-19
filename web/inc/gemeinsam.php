@@ -15,6 +15,7 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
 const NAME_MUSTER = '~^[\p{L}\p{N} ._\-!?]{1,20}$~u';
+const NAME_GESPERRT_S = 86400; // so lange gehoert ein Name nach der letzten Benutzung seinem Geraet
 
 function antwort(array $daten, int $status = 200): void {
     http_response_code($status);
@@ -22,9 +23,9 @@ function antwort(array $daten, int $status = 200): void {
     exit;
 }
 
-function fehler(string $text, int $status = 400): void {
+function fehler(string $text, int $status = 400, array $mehr = []): void {
     http_response_code($status);
-    echo json_encode(['ok' => false, 'fehler' => $text], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => false, 'fehler' => $text] + $mehr, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -106,12 +107,6 @@ function tabellen_anlegen(PDO $pdo): void {
         UNIQUE KEY schluessel_hash (schluessel_hash),
         FOREIGN KEY (spieler_id) REFERENCES " . t('spieler') . "(id) ON DELETE CASCADE
     ) $opt");
-    $pdo->exec('CREATE TABLE IF NOT EXISTS ' . t('uebertragung') . " (
-        code_hash CHAR(64) PRIMARY KEY,
-        spieler_id INT UNSIGNED NOT NULL,
-        ablauf DATETIME NOT NULL,
-        FOREIGN KEY (spieler_id) REFERENCES " . t('spieler') . "(id) ON DELETE CASCADE
-    ) $opt");
     $pdo->exec('CREATE TABLE IF NOT EXISTS ' . t('ergebnis') . " (
         spieler_id INT UNSIGNED NOT NULL,
         kategorie VARCHAR(20) NOT NULL,
@@ -124,12 +119,6 @@ function tabellen_anlegen(PDO $pdo): void {
     $pdo->exec('CREATE TABLE IF NOT EXISTS ' . t('marke') . " (
         kennung CHAR(32) PRIMARY KEY,
         benutzt DATETIME NOT NULL
-    ) $opt");
-    $pdo->exec('CREATE TABLE IF NOT EXISTS ' . t('fehlversuch') . " (
-        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        art VARCHAR(20) NOT NULL,
-        zeit DATETIME NOT NULL,
-        KEY art_zeit (art, zeit)
     ) $opt");
     $pdo->exec('CREATE TABLE IF NOT EXISTS ' . t('einstellung') . " (
         schluessel VARCHAR(40) PRIMARY KEY,
@@ -151,20 +140,6 @@ function geheimnis(): string {
     $neu = bin2hex(random_bytes(32));
     $pdo->prepare('INSERT IGNORE INTO ' . t('einstellung') . " (schluessel, wert) VALUES ('marken_geheimnis', ?)")->execute([$neu]);
     return (string) $pdo->query('SELECT wert FROM ' . t('einstellung') . " WHERE schluessel = 'marken_geheimnis'")->fetchColumn();
-}
-
-// --- Fehlversuche (gegen Durchprobieren) ----------------------------------------------
-
-function zu_viele(string $art, int $hoechstens, int $sekunden): bool {
-    $stmt = db()->prepare('SELECT COUNT(*) FROM ' . t('fehlversuch') . ' WHERE art = ? AND zeit > ?');
-    $stmt->execute([$art, gmdate('Y-m-d H:i:s', time() - $sekunden)]);
-    return (int) $stmt->fetchColumn() >= $hoechstens;
-}
-
-function versuch_merken(string $art): void {
-    $pdo = db();
-    $pdo->prepare('INSERT INTO ' . t('fehlversuch') . ' (art, zeit) VALUES (?, ?)')->execute([$art, jetzt()]);
-    $pdo->prepare('DELETE FROM ' . t('fehlversuch') . ' WHERE zeit < ?')->execute([gmdate('Y-m-d H:i:s', time() - 86400)]);
 }
 
 // --- Spieler -------------------------------------------------------------------------------

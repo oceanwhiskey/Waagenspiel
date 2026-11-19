@@ -122,10 +122,7 @@ class App {
     $("zum-konto").onclick = () => this.showAccount("start");
     $("welt-name").onclick = () => this.showAccount("ende");
     $("konto-zurueck").onclick = () => this.leaveAccount();
-    $("name-form").onsubmit = (e) => { e.preventDefault(); this.createName(); };
-    $("code-form").onsubmit = (e) => { e.preventDefault(); this.redeemCode(); };
-    $("umbenennen-form").onsubmit = (e) => { e.preventDefault(); this.renameName(); };
-    $("code-zeigen").onclick = () => this.showTransferCode();
+    $("name-form").onsubmit = (e) => { e.preventDefault(); this.takeName(); };
     $("abmelden").onclick = () => this.logoutHere();
     $("name-loeschen").onclick = () => this.deleteName();
     document.addEventListener("keydown", (e) => this.onKey(e));
@@ -318,7 +315,7 @@ class App {
     this.accountBack = back;
     this.show("konto");
     $("konto-status").textContent = "";
-    $("code-anzeige").hidden = true;
+    $("name-feld").value = "";
     this.renderAccount();
   }
 
@@ -333,36 +330,13 @@ class App {
 
   async renderAccount() {
     const named = !!this.account.key;
-    $("konto-neu").hidden = named;
     $("konto-da").hidden = !named;
-    if (!named) {
-      $("name-feld").value = "";
-      return;
-    }
+    $("konto-links").hidden = !named;
+    $("name-feld").placeholder = named ? "Neuer Spielername" : "Dein Spielername";
+    if (!named) return;
     $("konto-name").textContent = this.account.name || "…";
-    $("umbenennen-feld").value = this.account.name || "";
     try {
-      const me = await this.account.me();
-      $("konto-name").textContent = me.name;
-      $("geraete").replaceChildren(...me.geraete.map((device) => {
-        const li = document.createElement("li");
-        const label = document.createElement("span");
-        const since = new Date(device.erstellt).toLocaleDateString("de-DE");
-        label.textContent = device.dieses ? `Dieses Gerät (seit ${since})` : `Gerät seit ${since}`;
-        li.append(label);
-        if (!device.dieses) {
-          const off = document.createElement("button");
-          off.className = "link";
-          off.type = "button";
-          off.textContent = "abmelden";
-          off.onclick = async () => {
-            await this.guard(() => this.account.logoutDevice(device.id));
-            this.renderAccount();
-          };
-          li.append(off);
-        }
-        return li;
-      }));
+      $("konto-name").textContent = (await this.account.me()).name;
     } catch (error) {
       $("konto-status").textContent = error.message;
       if (error.status === 401) {
@@ -378,67 +352,44 @@ class App {
     try {
       return await action();
     } catch (error) {
-      $("konto-status").textContent = error.message;
+      let text = error.message;
+      if (error.data?.frei_ab) {
+        const free = new Date(error.data.frei_ab);
+        const today = free.toDateString() === new Date().toDateString();
+        const time = free.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+        text += ` Er wird frei, wenn er einen Tag nicht benutzt wurde: ${today ? "heute" : "morgen"} um ${time} Uhr.`;
+      }
+      $("konto-status").textContent = text;
       return undefined;
     }
   }
 
-  async createName() {
+  async takeName() {
     const name = validName($("name-feld").value);
     if (!name) {
       $("konto-status").textContent = "Bitte 1 bis 20 Zeichen: Buchstaben, Ziffern, Leerzeichen, . _ - ! ?";
       return;
     }
-    if (await this.guard(() => this.account.create(name))) this.afterNamed();
-  }
-
-  async redeemCode() {
-    if (await this.guard(() => this.account.redeem($("code-feld").value))) this.afterNamed();
-  }
-
-  afterNamed() {
+    if (!(await this.guard(() => this.account.take(name)))) return;
+    $("name-feld").value = "";
     this.updateAccountLink();
     if (this.accountBack === "ende") this.leaveAccount();
     else this.renderAccount();
   }
 
-  async renameName() {
-    const name = validName($("umbenennen-feld").value);
-    if (!name) {
-      $("konto-status").textContent = "Bitte 1 bis 20 Zeichen: Buchstaben, Ziffern, Leerzeichen, . _ - ! ?";
-      return;
-    }
-    if (await this.guard(() => this.account.rename(name))) {
-      this.updateAccountLink();
-      await this.renderAccount();
-      $("konto-status").textContent = "Name geändert.";
-    }
-  }
-
-  async showTransferCode() {
-    const data = await this.guard(() => this.account.transferCode());
-    if (!data) return;
-    const box = $("code-anzeige");
-    const code = document.createElement("strong");
-    code.textContent = data.code;
-    box.replaceChildren(code, ` – auf dem anderen Gerät unter „Spielername“ eingeben. `
-      + `Gilt ${Math.round(data.gueltig_s / 60)} Minuten und nur einmal.`);
-    box.hidden = false;
-  }
-
   async logoutHere() {
-    const ok = confirm("Auf diesem Gerät abmelden? Ist es dein letztes Gerät mit diesem Namen, "
-      + "wird der Name samt Ergebnissen gelöscht. Übertrage ihn vorher, wenn du ihn behalten willst.");
+    const ok = confirm("Auf diesem Gerät abmelden? Der Name bleibt mit deinen Ergebnissen bestehen "
+      + "und ist nach einem Tag wieder frei, auch für dich auf einem anderen Gerät.");
     if (!ok) return;
-    const deleted = await this.guard(() => this.account.logout());
-    if (deleted === undefined) return;
+    const done = await this.guard(async () => { await this.account.logout(); return true; });
+    if (!done) return;
     this.updateAccountLink();
     await this.renderAccount();
-    $("konto-status").textContent = deleted ? "Abgemeldet. Der Name ist gelöscht." : "Auf diesem Gerät abgemeldet.";
+    $("konto-status").textContent = "Auf diesem Gerät abgemeldet.";
   }
 
   async deleteName() {
-    if (!confirm("Namen und alle Ergebnisse auf allen Geräten löschen? Das lässt sich nicht rückgängig machen.")) return;
+    if (!confirm("Namen und alle Ergebnisse löschen? Das lässt sich nicht rückgängig machen.")) return;
     const done = await this.guard(async () => { await this.account.remove(); return true; });
     if (!done) return;
     this.updateAccountLink();
@@ -773,7 +724,7 @@ class App {
 // Muss zu <meta name="waagenspiel-version"> in index.html passen; bei jedem Update
 // beider Dateien erhoehen. Passt es nicht (alte Seite aus dem Browser-Cache, neues
 // Skript), wird die Seite einmal neu geladen.
-const VERSION = "8";
+const VERSION = "9";
 
 function pageIsCurrent() {
   const meta = document.querySelector('meta[name="waagenspiel-version"]');

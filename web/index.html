@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#eaf6ff">
-  <meta name="waagenspiel-version" content="8">
+  <meta name="waagenspiel-version" content="9">
   <meta name="description" content="Waagen-Spiel: Schau dir die Waagen an und finde die schwerste Figur.">
   <title>Waagen-Spiel</title>
   <link rel="manifest" href="manifest.webmanifest">
@@ -40,35 +40,20 @@
     <!-- Spielername -->
     <section id="konto" class="screen" hidden>
       <h1>Spielername</h1>
-      <div id="konto-neu">
-        <p class="sub">Mit einem Spielernamen kommen deine Ergebnisse in die Bestenliste.
-          Kein Passwort, keine E-Mail: Dieses Gerät merkt sich den Namen.</p>
-        <form id="name-form" class="name-row wide">
-          <input id="name-feld" maxlength="20" autocomplete="nickname" enterkeyhint="go" placeholder="Dein Spielername" required>
-          <button class="small good" type="submit">Los</button>
-        </form>
-        <p class="note">Schon einen Namen auf einem anderen Gerät? Dort unter „Spielername“ einen Code erzeugen:</p>
-        <form id="code-form" class="name-row wide">
-          <input id="code-feld" maxlength="20" autocomplete="off" autocapitalize="characters" placeholder="WAAGE-XXXX-XXXX" required>
-          <button class="small blue" type="submit">Übernehmen</button>
-        </form>
-      </div>
+      <p class="sub">Mit einem Spielernamen kommen deine Ergebnisse in die Bestenliste.
+        Kein Passwort, keine E-Mail. Der Name gehört dir, solange du ihn benutzt;
+        nach einem Tag Pause ist er wieder frei – auch für dein anderes Gerät.</p>
       <div id="konto-da" hidden>
         <p class="sub">Du spielst als <b id="konto-name"></b>.</p>
-        <h2>Auf ein anderes Gerät übertragen</h2>
-        <button id="code-zeigen" class="small gold" type="button">Code erzeugen</button>
-        <p id="code-anzeige" class="code-box" hidden></p>
-        <h2>Name ändern</h2>
-        <form id="umbenennen-form" class="name-row wide">
-          <input id="umbenennen-feld" maxlength="20" autocomplete="nickname" required>
-          <button class="small blue" type="submit">Ändern</button>
-        </form>
-        <h2>Geräte mit diesem Namen</h2>
-        <ul id="geraete" class="devices"></ul>
-        <div class="links">
-          <button id="abmelden" class="link" type="button">Auf diesem Gerät abmelden</button>
-          <button id="name-loeschen" class="link danger" type="button">Name löschen</button>
-        </div>
+        <h2>Anderen Namen nehmen</h2>
+      </div>
+      <form id="name-form" class="name-row wide">
+        <input id="name-feld" maxlength="20" autocomplete="nickname" enterkeyhint="go" placeholder="Dein Spielername" required>
+        <button class="small good" type="submit">Los</button>
+      </form>
+      <div id="konto-links" class="links" hidden>
+        <button id="abmelden" class="link" type="button">Auf diesem Gerät abmelden</button>
+        <button id="name-loeschen" class="link danger" type="button">Name löschen</button>
       </div>
       <p id="konto-status" class="note"></p>
       <button id="konto-zurueck" class="big blue">Zurück</button>

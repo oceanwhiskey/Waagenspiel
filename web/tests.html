@@ -137,15 +137,30 @@
       const fake = async (url, options) => {
         seen.push(options.headers["X-Waagenspiel-Schluessel"] || null);
         const aktion = new URLSearchParams(options.body).get("aktion");
-        if (aktion === "anlegen") return { status: 200, json: async () => ({ ok: true, name: "Jörg", schluessel: "k".repeat(43) }) };
+        if (aktion === "nehmen") return { status: 200, json: async () => ({ ok: true, name: "Jörg", schluessel: "k".repeat(43) }) };
         return { status: 401, json: async () => ({ ok: false, fehler: "Dieses Geraet hat keinen Spielernamen (mehr)." }) };
       };
       const account = new PlayerAccount({ storage, fetchFn: fake });
-      eq(await account.create("Jörg"), "Jörg");
+      eq(await account.take("Jörg"), "Jörg");
       eq([account.name, account.key], ["Jörg", "k".repeat(43)]);
       try { await account.me(); ok(false, "kein Fehler"); } catch (e) { eq(e.status, 401); }
       eq(seen, [null, "k".repeat(43)]);
       eq([account.name, account.key], [null, null]);
+    });
+
+    await test("Spielername: vergebener Name meldet frei_ab, eigener behaelt den Schluessel", async () => {
+      const store = new Map([["waagenspiel.schluessel", "alt"], ["waagenspiel.spielername", "Ina"]]);
+      const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+      const fake = async (url, options) => {
+        const name = new URLSearchParams(options.body).get("name");
+        if (name === "Ina") return { status: 200, json: async () => ({ ok: true, name: "Ina", schluessel: null }) };
+        return { status: 409, json: async () => ({ ok: false, fehler: "„Bo“ ist gerade vergeben.", frei_ab: "2030-01-02T03:04:05Z" }) };
+      };
+      const account = new PlayerAccount({ storage, fetchFn: fake });
+      eq(await account.take("Ina"), "Ina");
+      eq(account.key, "alt");
+      try { await account.take("Bo"); ok(false, "kein Fehler"); } catch (e) { eq([e.status, e.data.frei_ab], [409, "2030-01-02T03:04:05Z"]); }
+      eq(account.name, "Ina");
     });
 
     await test("Bestenliste: Serverfehler kommen als Meldung an", async () => {

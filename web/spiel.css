@@ -316,21 +316,13 @@ h2 { font-size: 1rem; margin: 12px 0 6px; }
 /* --- Spielername ----------------------------------------------------------- */
 
 #konto { display: flex; flex-direction: column; align-items: center; text-align: center; overflow-y: auto; padding-bottom: 16px; }
-#konto > div { width: min(100%, 400px); }
+#konto > div, #konto > form, #konto > .sub { width: min(100%, 400px); }
 #konto h2 { margin-top: 18px; }
-.name-row.wide { width: 100%; margin: 10px 0; }
-.code-box {
-  margin: 10px 0 0;
-  padding: 10px 12px;
-  background: #fff8e1;
-  border: 2px dashed var(--gold);
-  border-radius: 12px;
-  font-size: 0.95rem;
-}
-.code-box strong { display: block; font-size: 1.4rem; letter-spacing: 0.06em; margin-bottom: 4px; }
-.devices { list-style: none; padding: 0; margin: 6px 0; text-align: left; }
-.devices li { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px; border-bottom: 1px solid var(--line); }
-.devices .link { margin: 0; }
+.name-row.wide { margin: 10px 0; }
+#konto-links { margin-top: 10px; }
+#konto-da { margin-top: 14px; }
+#konto-da .sub { font-size: 1.1rem; }
+#konto-name { font-size: 1.3rem; }
 .link.danger { color: var(--bad); }
 .footer { margin-top: auto; padding-top: 18px; font-size: 0.85rem; }
 .footer a { color: var(--soft); }
