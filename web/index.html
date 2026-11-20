@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#eaf6ff">
-  <meta name="waagenspiel-version" content="9">
+  <meta name="waagenspiel-version" content="10">
   <meta name="description" content="Waagen-Spiel: Schau dir die Waagen an und finde die schwerste Figur.">
   <title>Waagen-Spiel</title>
   <link rel="manifest" href="manifest.webmanifest">
@@ -30,33 +30,10 @@
       <button id="los" class="big good">Los geht's!</button>
       <div class="links">
         <button id="zur-bestenliste" class="link" type="button">Bestenliste</button>
-        <button id="zum-konto" class="link" type="button">Spielername wählen</button>
         <button id="ton" class="link" type="button"></button>
       </div>
       <p id="laden" class="note"></p>
       <p class="footer"><a href="datenschutz.html">Datenschutz</a> · <a href="impressum.html">Impressum</a></p>
-    </section>
-
-    <!-- Spielername -->
-    <section id="konto" class="screen" hidden>
-      <h1>Spielername</h1>
-      <p class="sub">Mit einem Spielernamen kommen deine Ergebnisse in die Bestenliste.
-        Kein Passwort, keine E-Mail. Der Name gehört dir, solange du ihn benutzt;
-        nach einem Tag Pause ist er wieder frei – auch für dein anderes Gerät.</p>
-      <div id="konto-da" hidden>
-        <p class="sub">Du spielst als <b id="konto-name"></b>.</p>
-        <h2>Anderen Namen nehmen</h2>
-      </div>
-      <form id="name-form" class="name-row wide">
-        <input id="name-feld" maxlength="20" autocomplete="nickname" enterkeyhint="go" placeholder="Dein Spielername" required>
-        <button class="small good" type="submit">Los</button>
-      </form>
-      <div id="konto-links" class="links" hidden>
-        <button id="abmelden" class="link" type="button">Auf diesem Gerät abmelden</button>
-        <button id="name-loeschen" class="link danger" type="button">Name löschen</button>
-      </div>
-      <p id="konto-status" class="note"></p>
-      <button id="konto-zurueck" class="big blue">Zurück</button>
     </section>
 
     <!-- Spiel -->
@@ -91,7 +68,7 @@
     <!-- Bestenliste -->
     <section id="bestenliste" class="screen" hidden>
       <h1>Bestenliste</h1>
-      <p class="sub">Die besten zehn je Schwierigkeit und Zeit. Es zählen nur volle Partien auf Zeit mit Spielernamen.</p>
+      <p class="sub">Alle Rekorde je Schwierigkeit und Zeit, der aktuelle ganz oben. Wer ihn in einer vollen Partie bricht, trägt sich mit einem Namen ein.</p>
       <div id="liste-stufe" class="chips" role="radiogroup" aria-label="Schwierigkeit"></div>
       <div id="liste-zeit" class="chips" role="radiogroup" aria-label="Zeit"></div>
       <ol id="liste" class="stats board"></ol>
@@ -112,7 +89,10 @@
       </table>
       <div id="welt" class="world" hidden>
         <p id="welt-text"></p>
-        <button id="welt-name" class="small gold" type="button" hidden>Spielernamen wählen</button>
+        <form id="welt-form" class="name-row" hidden>
+          <input id="welt-feld" maxlength="20" autocomplete="nickname" enterkeyhint="done" placeholder="Dein Name" required>
+          <button id="welt-knopf" class="small good" type="submit">Eintragen</button>
+        </form>
       </div>
       <div id="ende-figuren" class="row-figures"></div>
       <div class="end-buttons">

@@ -1,11 +1,9 @@
 <?php
-// Gemeinsame Bausteine fuer spieler.php und bestenliste.php (docs/04, Schritt 1).
+// Gemeinsame Bausteine fuer bestenliste.php.
 //
 // - Datenbank: Zugangsdaten aus waagenspiel-config/db.ini, die AUSSERHALB der
 //   Webseiten liegt (wird von hier aus nach oben gesucht). Tabellen werden beim
 //   ersten Aufruf angelegt.
-// - Spieler: Ein Geraet weist sich mit dem Kopf "X-Waagenspiel-Schluessel" aus.
-//   Gespeichert wird nur der SHA-256-Hash des zufaelligen Schluessels.
 // - Kein Passwort, keine E-Mail, keine IP-Adressen.
 
 declare(strict_types=1);
@@ -15,7 +13,6 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
 const NAME_MUSTER = '~^[\p{L}\p{N} ._\-!?]{1,20}$~u';
-const NAME_GESPERRT_S = 86400; // so lange gehoert ein Name nach der letzten Benutzung seinem Geraet
 
 function antwort(array $daten, int $status = 200): void {
     http_response_code($status);
@@ -90,31 +87,13 @@ function db(): PDO {
 
 function tabellen_anlegen(PDO $pdo): void {
     $opt = 'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
-    $pdo->exec('CREATE TABLE IF NOT EXISTS ' . t('spieler') . " (
+    $pdo->exec('CREATE TABLE IF NOT EXISTS ' . t('rekord') . " (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(20) NOT NULL,
-        name_klein VARCHAR(20) NOT NULL,
-        erstellt DATETIME NOT NULL,
-        zuletzt DATETIME NOT NULL,
-        UNIQUE KEY name_klein (name_klein)
-    ) $opt");
-    $pdo->exec('CREATE TABLE IF NOT EXISTS ' . t('geraet') . " (
-        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        spieler_id INT UNSIGNED NOT NULL,
-        schluessel_hash CHAR(64) NOT NULL,
-        erstellt DATETIME NOT NULL,
-        zuletzt DATETIME NOT NULL,
-        UNIQUE KEY schluessel_hash (schluessel_hash),
-        FOREIGN KEY (spieler_id) REFERENCES " . t('spieler') . "(id) ON DELETE CASCADE
-    ) $opt");
-    $pdo->exec('CREATE TABLE IF NOT EXISTS ' . t('ergebnis') . " (
-        spieler_id INT UNSIGNED NOT NULL,
         kategorie VARCHAR(20) NOT NULL,
+        name VARCHAR(20) NOT NULL,
         punkte INT NOT NULL,
         erreicht DATETIME NOT NULL,
-        PRIMARY KEY (spieler_id, kategorie),
-        KEY rangliste (kategorie, punkte),
-        FOREIGN KEY (spieler_id) REFERENCES " . t('spieler') . "(id) ON DELETE CASCADE
+        KEY kategorie_punkte (kategorie, punkte)
     ) $opt");
     $pdo->exec('CREATE TABLE IF NOT EXISTS ' . t('marke') . " (
         kennung CHAR(32) PRIMARY KEY,
@@ -142,7 +121,7 @@ function geheimnis(): string {
     return (string) $pdo->query('SELECT wert FROM ' . t('einstellung') . " WHERE schluessel = 'marken_geheimnis'")->fetchColumn();
 }
 
-// --- Spieler -------------------------------------------------------------------------------
+// --- Name ----------------------------------------------------------------------------------
 
 function name_pruefen(string $name): string {
     $name = trim(preg_replace('~\s+~u', ' ', $name) ?? '');
@@ -150,55 +129,4 @@ function name_pruefen(string $name): string {
         fehler('Name: 1 bis 20 Zeichen, Buchstaben, Ziffern, Leerzeichen und . _ - ! ?');
     }
     return $name;
-}
-
-function klein(string $name): string {
-    return function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
-}
-
-function neuer_schluessel(): string {
-    return rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-}
-
-function schluessel_hash(string $schluessel): string {
-    return hash('sha256', $schluessel);
-}
-
-/** Neues Geraet fuer einen Spieler; liefert den Schluessel (nur dieses eine Mal im Klartext). */
-function geraet_anlegen(int $spieler_id): string {
-    $schluessel = neuer_schluessel();
-    db()->prepare('INSERT INTO ' . t('geraet') . ' (spieler_id, schluessel_hash, erstellt, zuletzt) VALUES (?, ?, ?, ?)')
-        ->execute([$spieler_id, schluessel_hash($schluessel), jetzt(), jetzt()]);
-    return $schluessel;
-}
-
-/** Der angemeldete Spieler oder null. Liest den Kopf X-Waagenspiel-Schluessel. */
-function spieler(): ?array {
-    static $gelesen = false, $spieler = null;
-    if ($gelesen) {
-        return $spieler;
-    }
-    $gelesen = true;
-    $schluessel = (string) ($_SERVER['HTTP_X_WAAGENSPIEL_SCHLUESSEL'] ?? '');
-    if ($schluessel === '' || strlen($schluessel) > 100) {
-        return null;
-    }
-    $stmt = db()->prepare('SELECT s.id, s.name, s.erstellt, g.id AS geraet_id FROM ' . t('geraet') . ' g JOIN '
-        . t('spieler') . ' s ON s.id = g.spieler_id WHERE g.schluessel_hash = ?');
-    $stmt->execute([schluessel_hash($schluessel)]);
-    $spieler = $stmt->fetch() ?: null;
-    if ($spieler) {
-        $pdo = db();
-        $pdo->prepare('UPDATE ' . t('geraet') . ' SET zuletzt = ? WHERE id = ?')->execute([jetzt(), $spieler['geraet_id']]);
-        $pdo->prepare('UPDATE ' . t('spieler') . ' SET zuletzt = ? WHERE id = ?')->execute([jetzt(), $spieler['id']]);
-    }
-    return $spieler;
-}
-
-function spieler_noetig(): array {
-    $spieler = spieler();
-    if (!$spieler) {
-        fehler('Dieses Gerät hat keinen Spielernamen (mehr).', 401);
-    }
-    return $spieler;
 }

@@ -18,7 +18,7 @@
       panItems, panPositions, parseScale, pickCharacters, pointsFor, scaleView, seededRandom, stepsFor,
       penaltyFor, thinkSeconds, SETTLE_SECONDS,
     } from "./spiel.js";
-    import { GlobalBoard, PlayerAccount, validName } from "./bestenliste.js";
+    import { GlobalBoard, recordOf, validName } from "./bestenliste.js";
 
     const results = [];
     const test = async (name, fn) => {
@@ -130,45 +130,33 @@
       eq(validName("x".repeat(21)), null);
     });
 
-    await test("Spielername: Schluessel geht im Kopf mit, 401 vergisst ihn", async () => {
-      const store = new Map();
-      const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
-      const seen = [];
+    await test("Rekord: Name und Punkte gehen mit, 409 meldet den hoeheren Rekord", async () => {
+      const sent = [];
       const fake = async (url, options) => {
-        seen.push(options.headers["X-Waagenspiel-Schluessel"] || null);
-        const aktion = new URLSearchParams(options.body).get("aktion");
-        if (aktion === "nehmen") return { status: 200, json: async () => ({ ok: true, name: "Jörg", schluessel: "k".repeat(43) }) };
-        return { status: 401, json: async () => ({ ok: false, fehler: "Dieses Geraet hat keinen Spielernamen (mehr)." }) };
+        const body = new URLSearchParams(options.body);
+        sent.push(Object.fromEntries(body));
+        if (body.get("punkte") === "50") return { status: 409, json: async () => ({ ok: false, fehler: "Inzwischen gibt es einen höheren Rekord: 60 Punkte.", rekord: 60 }) };
+        return { status: 200, json: async () => ({ ok: true, liste: [{ name: "Jörg", punkte: 70, datum: "2026-11-20" }] }) };
       };
-      const account = new PlayerAccount({ storage, fetchFn: fake });
-      eq(await account.take("Jörg"), "Jörg");
-      eq([account.name, account.key], ["Jörg", "k".repeat(43)]);
-      try { await account.me(); ok(false, "kein Fehler"); } catch (e) { eq(e.status, 401); }
-      eq(seen, [null, "k".repeat(43)]);
-      eq([account.name, account.key], [null, null]);
+      const board = new GlobalBoard({ fetchFn: fake });
+      const list = await board.submit("t", "Mittel/30s", 70, "Jörg");
+      eq(list[0].name, "Jörg");
+      eq(sent[0], { aktion: "eintragen", marke: "t", kategorie: "Mittel/30s", punkte: "70", name: "Jörg" });
+      try { await board.submit("t", "Mittel/30s", 50, "X"); ok(false, "kein Fehler"); } catch (e) { eq([e.status, e.data.rekord], [409, 60]); }
     });
 
-    await test("Spielername: vergebener Name meldet frei_ab, eigener behaelt den Schluessel", async () => {
-      const store = new Map([["waagenspiel.schluessel", "alt"], ["waagenspiel.spielername", "Ina"]]);
-      const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
-      const fake = async (url, options) => {
-        const name = new URLSearchParams(options.body).get("name");
-        if (name === "Ina") return { status: 200, json: async () => ({ ok: true, name: "Ina", schluessel: null }) };
-        return { status: 409, json: async () => ({ ok: false, fehler: "„Bo“ ist gerade vergeben.", frei_ab: "2030-01-02T03:04:05Z" }) };
-      };
-      const account = new PlayerAccount({ storage, fetchFn: fake });
-      eq(await account.take("Ina"), "Ina");
-      eq(account.key, "alt");
-      try { await account.take("Bo"); ok(false, "kein Fehler"); } catch (e) { eq([e.status, e.data.frei_ab], [409, "2030-01-02T03:04:05Z"]); }
-      eq(account.name, "Ina");
+    await test("Rekord: aktueller Rekord ist der erste Eintrag, sonst 0", () => {
+      const lists = { "Mittel/30s": [{ name: "A", punkte: 90 }, { name: "B", punkte: 40 }] };
+      eq(recordOf(lists, "Mittel/30s"), 90);
+      eq(recordOf(lists, "Profi/30s"), 0);
+      eq(recordOf(null, "Profi/30s"), 0);
     });
 
     await test("Bestenliste: Serverfehler kommen als Meldung an", async () => {
-      const account = new PlayerAccount({ storage: null });
       const fake = async () => ({ status: 409, json: async () => ({ ok: false, fehler: "Diese Partie ist schon eingetragen" }) });
-      const board = new GlobalBoard({ account, fetchFn: fake });
-      try { await board.submit("t", "Mittel/30s", 3); ok(false, "kein Fehler"); } catch (e) { eq(e.message, "Diese Partie ist schon eingetragen"); }
-      const offline = new GlobalBoard({ account, fetchFn: async () => ({ json: async () => { throw new Error("kein JSON"); } }) });
+      const board = new GlobalBoard({ fetchFn: fake });
+      try { await board.submit("t", "Mittel/30s", 3, "A"); ok(false, "kein Fehler"); } catch (e) { eq(e.message, "Diese Partie ist schon eingetragen"); }
+      const offline = new GlobalBoard({ fetchFn: async () => ({ json: async () => { throw new Error("kein JSON"); } }) });
       try { await offline.lists(); ok(false); } catch (e) { ok(e.message.includes("nicht erreichbar")); }
     });
 

@@ -58,13 +58,11 @@ deshalb sind die Lösungsschritte vorberechnet. Mehr Rätsel je Stufe:
 ## Bestenliste
 
 Eigene Rekorde und Einstellungen liegen nur im Browser des Geräts
-(`localStorage`). Dazu kommen **Spielernamen** und eine **Top 10** je
-Schwierigkeit und Zeit (`spieler.php`, `bestenliste.php`, `inc/gemeinsam.php`,
-`bestenliste.js`; Konzept in `docs/04_konzept_mehrspieler.md`). Ein
-Spielername braucht kein Passwort und keine E-Mail: Das Gerät bekommt einen
-zufälligen Schlüssel, der Server speichert nur dessen Hash. Ein Name ist
-einen Tag nach seiner letzten Benutzung wieder frei; dann kann ihn jedes Gerät
-nehmen (so wechselt man auch das Gerät).
+(`localStorage`). Dazu kommt eine **Bestenliste als Rekord-Historie** je
+Schwierigkeit und Zeit (`bestenliste.php`, `inc/gemeinsam.php`,
+`bestenliste.js`): Wer den Rekord in einer vollen Partie auf Zeit bricht, trägt
+sich mit einem frei gewählten Namen ein; frühere Rekorde bleiben darunter
+stehen. Es gibt keine Anmeldung und keine Spielerkonten.
 
 - Braucht PHP (ab 7.4) und eine MySQL-Datenbank. Die Zugangsdaten liegen in
   `waagenspiel-config/db.ini` **außerhalb** der Webseiten (die PHP-Dateien
@@ -76,10 +74,8 @@ nehmen (so wechselt man auch das Gerät).
   Spielmarke. Der Server nimmt sie erst nach Ablauf der Spielzeit an, nur
   einmal und nur mit glaubwürdigen Punkten (höchstens 150 je Sekunde). Wer es
   darauf anlegt, kann im Browser trotzdem schummeln.
-- Zurücksetzen: Tabelle `ws_ergebnis` leeren. Einen unpassenden Namen
-  entfernen: seine Zeile in `ws_spieler` löschen (Geräte und Ergebnisse
-  verschwinden mit).
-- Ohne PHP und Datenbank läuft das Spiel ganz normal, nur ohne Namen und
-  Bestenliste.
+- Zurücksetzen: Tabelle `ws_rekord` leeren. Einen unpassenden Eintrag
+  entfernen: seine Zeile in `ws_rekord` löschen.
+- Ohne PHP und Datenbank läuft das Spiel ganz normal, nur ohne Bestenliste.
 - `datenschutz.html` beschreibt, was gespeichert wird. `impressum.html`
   enthält die Anbieterangaben.

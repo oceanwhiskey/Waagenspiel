@@ -1,14 +1,18 @@
 # Konzept: Spielername und Spielen gegen andere
 
-Stand: Schritt 1 (Spielername und Bestenliste mit Namen) ist umgesetzt:
-`web/spieler.php`, `web/bestenliste.php`, `web/inc/gemeinsam.php`,
-`web/bestenliste.js`. Die Schritte 2 bis 4 sind noch Entwurf. Entschieden:
-Anmeldung über Spielername und Geräteschlüssel, ohne Passwort und ohne E-Mail.
-
 Ziel: Man wählt einen Spielernamen und misst sich mit anderen. Es bleibt
 schlicht: keine Echtzeit-Technik, keine privaten Daten, keine fremden
 Dienste. Alles läuft auf dem vorhandenen Webspace bei Biohost (PHP 7.4, MySQL
 über PDO; geprüft am 18.11.2026).
+
+> **Stand November 2026: Spielernamen wurden wieder abgeschafft.** Nach dem
+> Ausprobieren (erst mit Übertragungscode, dann mit einem Tag Sperre) war
+> beides zu umständlich. Jetzt gilt: Wer in einer vollen Partie auf Zeit den
+> Rekord bricht, trägt einen frei gewählten Namen ein. Alle Rekorde bleiben
+> als Historie stehen (Tabelle `ws_rekord`: kategorie, name, punkte,
+> erreicht). Abschnitt 2 und die Spielernamen-Teile unten beschreiben den
+> verworfenen Entwurf; für Duelle und Tagesrätsel müsste man neu überlegen,
+> wie Teilnehmer ohne Konto erkannt werden.
 
 ## 1. Was es geben soll
 

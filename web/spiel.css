@@ -315,14 +315,7 @@ h2 { font-size: 1rem; margin: 12px 0 6px; }
 
 /* --- Spielername ----------------------------------------------------------- */
 
-#konto { display: flex; flex-direction: column; align-items: center; text-align: center; overflow-y: auto; padding-bottom: 16px; }
-#konto > div, #konto > form, #konto > .sub { width: min(100%, 400px); }
-#konto h2 { margin-top: 18px; }
-.name-row.wide { margin: 10px 0; }
-#konto-links { margin-top: 10px; }
-#konto-da { margin-top: 14px; }
-#konto-da .sub { font-size: 1.1rem; }
-#konto-name { font-size: 1.3rem; }
+#welt-form { margin-top: 8px; }
 .link.danger { color: var(--bad); }
 .footer { margin-top: auto; padding-top: 18px; font-size: 0.85rem; }
 .footer a { color: var(--soft); }

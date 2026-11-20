@@ -13,7 +13,7 @@ import {
   streakFactor,
 } from "./spiel.js";
 import { ScaleDrawing, animateTilt, character, characterIcon, inlineFigure } from "./figuren.js";
-import { GlobalBoard, PlayerAccount, validName } from "./bestenliste.js";
+import { GlobalBoard, recordOf, validName } from "./bestenliste.js";
 
 const $ = (id) => document.getElementById(id);
 const SPOTS = [[118, 40], [242, 200], [118, 360]]; // oben links, Mitte rechts, unten links
@@ -68,8 +68,8 @@ class Sound {
 // --- Fenster ----------------------------------------------------------------------
 
 class App {
-  constructor({ makeSession, highscores, sound, board, account }) {
-    Object.assign(this, { makeSession, highscores, sound, board, account });
+  constructor({ makeSession, highscores, sound, board }) {
+    Object.assign(this, { makeSession, highscores, sound, board });
     this.lists = null; // Top 10 je Kategorie, sobald geladen
     this.boardTime = 60;
     this.boardLevel = "Steigend";
@@ -100,7 +100,7 @@ class App {
   }
 
   show(id) {
-    for (const s of ["start", "spiel", "ende", "bestenliste", "konto"]) $(s).hidden = s !== id;
+    for (const s of ["start", "spiel", "ende", "bestenliste"]) $(s).hidden = s !== id;
     $("blatt").hidden = true;
   }
 
@@ -119,12 +119,7 @@ class App {
     $("ton").onclick = () => { this.sound.toggle(); this.updateSoundLabel(); };
     $("zur-bestenliste").onclick = () => this.showBoard();
     $("liste-zurueck").onclick = () => this.showStart();
-    $("zum-konto").onclick = () => this.showAccount("start");
-    $("welt-name").onclick = () => this.showAccount("ende");
-    $("konto-zurueck").onclick = () => this.leaveAccount();
-    $("name-form").onsubmit = (e) => { e.preventDefault(); this.takeName(); };
-    $("abmelden").onclick = () => this.logoutHere();
-    $("name-loeschen").onclick = () => this.deleteName();
+    $("welt-form").onsubmit = (e) => { e.preventDefault(); this.submitRecord(); };
     document.addEventListener("keydown", (e) => this.onKey(e));
   }
 
@@ -132,7 +127,6 @@ class App {
     if (e.target instanceof HTMLInputElement) return; // Namensfeld: Tasten gehoeren dem Feld
     const key = e.key.toLowerCase();
     if (key === "escape") {
-      if (!$("konto").hidden) return this.leaveAccount();
       return $("bestenliste").hidden ? this.leave() : this.showStart();
     }
     if (!$("start").hidden && key === "enter") return this.startGame();
@@ -162,7 +156,6 @@ class App {
     this.updateRecord();
     this.updateSoundLabel();
     this.drawLogo();
-    this.updateAccountLink();
     this.loadLists().then(() => this.updateRecord());
   }
 
@@ -191,12 +184,7 @@ class App {
       : best ? `Dein Rekord: ${best} Punkte` : "Noch kein eigener Rekord – stell den ersten auf!";
     const list = this.timeLimit == null ? null : this.lists?.[Highscores.key(this.difficulty, this.timeLimit)];
     $("weltrekord").textContent = this.timeLimit == null || !this.lists ? ""
-      : list?.length ? `Bestenliste: 1. ${list[0].name} mit ${list[0].punkte} Punkten` : "Bestenliste: noch frei – sei die oder der Erste!";
-  }
-
-  updateAccountLink() {
-    const name = this.account.name;
-    $("zum-konto").textContent = name ? `Spielername: ${name}` : "Spielername wählen";
+      : list?.length ? `Rekord: ${list[0].name} mit ${list[0].punkte} Punkten` : "Bestenliste: noch kein Rekord – stell den ersten auf!";
   }
 
   // --- Bestenliste ---------------------------------------------------------------------
@@ -230,18 +218,18 @@ class App {
   renderBoard() {
     const list = this.lists?.[Highscores.key(this.boardLevel, this.boardTime)] || [];
     $("liste-status").textContent = !this.lists ? "Die Bestenliste ist gerade nicht erreichbar."
-      : list.length ? "" : "Hier hat noch niemand gespielt.";
+      : list.length ? "" : "Hier gibt es noch keinen Rekord.";
     $("liste").replaceChildren(...this.boardRows(list));
   }
 
   boardRows(list) {
-    const me = this.account.name?.toLocaleLowerCase("de-DE");
     return list.map((entry, i) => {
       const row = document.createElement("li");
-      if (entry.name.toLocaleLowerCase("de-DE") === me) row.className = "mine";
+      if (i === 0) row.className = "mine"; // aktueller Rekord
       const rank = document.createElement("span");
       rank.className = "rank";
-      rank.textContent = `${i + 1}.`;
+      rank.textContent = i === 0 ? "👑" : "";
+      rank.title = i === 0 ? "aktueller Rekord" : "früherer Rekord";
       const who = document.createElement("span");
       who.className = "who";
       who.textContent = entry.name;
@@ -256,145 +244,58 @@ class App {
     });
   }
 
-  /** Nach einer vollen Partie auf Zeit: mit Namen eintragen, sonst Namen anbieten. */
+  /** Nach einer vollen Partie auf Zeit: Bei einem neuen Rekord darf man sich eintragen. */
   async offerRecord(key, points, token) {
     const box = $("welt");
-    $("welt-name").hidden = true;
+    $("welt-form").hidden = true;
     box.hidden = true;
-    if (!token) return;
-    if (points < 1) {
-      box.hidden = false;
-      $("welt-text").textContent = "In die Bestenliste kommen nur Partien mit mindestens 1 Punkt.";
+    if (!token || points < 1) return;
+    const lists = await this.loadLists();
+    if (this.session || $("ende").hidden) return; // inzwischen weitergespielt
+    box.hidden = false;
+    if (!lists) {
+      $("welt-text").textContent = "Die Bestenliste ist gerade nicht erreichbar.";
       return;
     }
-    if (!this.account.key) {
-      this.pending = { key, points, token };
-      box.hidden = false;
-      $("welt-text").textContent = "Mit einem Spielernamen kommt dieses Ergebnis in die Bestenliste.";
-      $("welt-name").hidden = false;
+    const best = recordOf(lists, key);
+    if (points <= best) {
+      const holder = lists[key][0];
+      $("welt-text").textContent = `Rekord in der Bestenliste: ${holder.punkte} Punkte von ${holder.name}.`;
       return;
     }
-    await this.submitResult({ key, points, token });
+    this.pending = { key, points, token };
+    const [level, time] = key.split("/");
+    $("welt-text").textContent = `Neuer Rekord in der Bestenliste (${level}, ${time.replace("s", " s")})! Trag dich ein:`;
+    $("welt-feld").value = store.getItem("waagenspiel.spielername") || "";
+    $("welt-form").hidden = false;
+    this.confetti();
   }
 
-  async submitResult(pending) {
-    const box = $("welt");
-    box.hidden = false;
-    $("welt-name").hidden = true;
-    $("welt-text").textContent = "Wird eingetragen …";
+  async submitRecord() {
+    const pending = this.pending;
+    if (!pending) return;
+    const name = validName($("welt-feld").value);
+    if (!name) {
+      $("welt-text").textContent = "Bitte 1 bis 20 Zeichen: Buchstaben, Ziffern, Leerzeichen, . _ - ! ?";
+      return;
+    }
+    $("welt-knopf").disabled = true;
     try {
-      const result = await this.board.submit(pending.token, pending.key, pending.points);
+      const list = await this.board.submit(pending.token, pending.key, pending.points, name);
       this.pending = null;
-      if (this.lists) this.lists[pending.key] = result.liste;
-      const [level, time] = pending.key.split("/");
-      const where = `${level}, ${time.replace("s", " s")}`;
-      if (result.platz <= 10) {
-        $("welt-text").textContent = result.verbessert
-          ? `Platz ${result.platz} in der Bestenliste (${where})!`
-          : `Dein bestes Ergebnis (${result.bestes}) steht weiter auf Platz ${result.platz} (${where}).`;
-        if (result.verbessert && result.platz <= 3) this.confetti();
-      } else {
-        const last = result.liste.at(-1);
-        $("welt-text").textContent = `Für die Top 10 hat es diesmal nicht gereicht (Platz 10: ${last.punkte}).`;
-      }
+      store.setItem("waagenspiel.spielername", name);
+      if (this.lists) this.lists[pending.key] = list;
+      $("welt-form").hidden = true;
+      $("welt-text").textContent = `Eingetragen: ${name} hält jetzt den Rekord!`;
     } catch (error) {
       $("welt-text").textContent = error.message;
-      if (error.status === 401) {
-        this.pending = pending;
-        $("welt-name").hidden = false;
-        this.updateAccountLink();
+      if (error.status !== 400) { // Name falsch: nochmal versuchen; sonst ist es vorbei
+        this.pending = null;
+        $("welt-form").hidden = true;
       }
+    } finally {
+      $("welt-knopf").disabled = false;
     }
-  }
-
-  // --- Spielername ------------------------------------------------------------------------
-
-  showAccount(back) {
-    this.clearTimers();
-    if (back !== "ende") this.session = null;
-    this.accountBack = back;
-    this.show("konto");
-    $("konto-status").textContent = "";
-    $("name-feld").value = "";
-    this.renderAccount();
-  }
-
-  leaveAccount() {
-    if (this.accountBack === "ende") {
-      this.show("ende");
-      if (this.pending && this.account.key) this.submitResult(this.pending);
-    } else {
-      this.showStart();
-    }
-  }
-
-  async renderAccount() {
-    const named = !!this.account.key;
-    $("konto-da").hidden = !named;
-    $("konto-links").hidden = !named;
-    $("name-feld").placeholder = named ? "Neuer Spielername" : "Dein Spielername";
-    if (!named) return;
-    $("konto-name").textContent = this.account.name || "…";
-    try {
-      $("konto-name").textContent = (await this.account.me()).name;
-    } catch (error) {
-      $("konto-status").textContent = error.message;
-      if (error.status === 401) {
-        this.updateAccountLink();
-        this.renderAccount();
-      }
-    }
-  }
-
-  /** Fuehrt eine Namens-Aktion aus und zeigt Fehler an. */
-  async guard(action) {
-    $("konto-status").textContent = "";
-    try {
-      return await action();
-    } catch (error) {
-      let text = error.message;
-      if (error.data?.frei_ab) {
-        const free = new Date(error.data.frei_ab);
-        const today = free.toDateString() === new Date().toDateString();
-        const time = free.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-        text += ` Er wird frei, wenn er einen Tag nicht benutzt wurde: ${today ? "heute" : "morgen"} um ${time} Uhr.`;
-      }
-      $("konto-status").textContent = text;
-      return undefined;
-    }
-  }
-
-  async takeName() {
-    const name = validName($("name-feld").value);
-    if (!name) {
-      $("konto-status").textContent = "Bitte 1 bis 20 Zeichen: Buchstaben, Ziffern, Leerzeichen, . _ - ! ?";
-      return;
-    }
-    if (!(await this.guard(() => this.account.take(name)))) return;
-    $("name-feld").value = "";
-    this.updateAccountLink();
-    if (this.accountBack === "ende") this.leaveAccount();
-    else this.renderAccount();
-  }
-
-  async logoutHere() {
-    const ok = confirm("Auf diesem Gerät abmelden? Der Name bleibt mit deinen Ergebnissen bestehen "
-      + "und ist nach einem Tag wieder frei, auch für dich auf einem anderen Gerät.");
-    if (!ok) return;
-    const done = await this.guard(async () => { await this.account.logout(); return true; });
-    if (!done) return;
-    this.updateAccountLink();
-    await this.renderAccount();
-    $("konto-status").textContent = "Auf diesem Gerät abgemeldet.";
-  }
-
-  async deleteName() {
-    if (!confirm("Namen und alle Ergebnisse löschen? Das lässt sich nicht rückgängig machen.")) return;
-    const done = await this.guard(async () => { await this.account.remove(); return true; });
-    if (!done) return;
-    this.updateAccountLink();
-    await this.renderAccount();
-    $("konto-status").textContent = "Name und Ergebnisse sind gelöscht.";
   }
 
   updateSoundLabel() {
@@ -560,6 +461,7 @@ class App {
     if (!this.accepting || !this.session) return;
     this.accepting = false;
     $("abzug").textContent = "";
+    this.lostStreak = this.session.isPractice ? 0 : this.session.streak;
     const feedback = this.session.answer(choice);
     this.updateHeader();
     if (feedback.correct) this.celebrate(choice, feedback);
@@ -609,7 +511,8 @@ class App {
     const right = inlineFigure(s.characters[feedback.answer]);
     const msg = $("nachricht");
     msg.className = "message bad-text";
-    msg.replaceChildren("Leider nicht – ", right, " ist am schwersten." + (feedback.points ? `  ${feedback.points}`.replace("-", "−") : ""));
+    msg.replaceChildren("Leider nicht – ", right, " ist am schwersten." + (feedback.points ? `  ${feedback.points}`.replace("-", "−") : "")
+      + (this.lostStreak >= 1 ? "  Serie vorbei, Faktor wieder ×1." : ""));
     if (feedback.points) this.floatPoints(this.cards[choice], `${feedback.points}`.replace("-", "−"), true);
     if (s.isPractice) {
       const lines = stepsFor(this.round, choice).flatMap((step) => step.text);
@@ -724,7 +627,7 @@ class App {
 // Muss zu <meta name="waagenspiel-version"> in index.html passen; bei jedem Update
 // beider Dateien erhoehen. Passt es nicht (alte Seite aus dem Browser-Cache, neues
 // Skript), wird die Seite einmal neu geladen.
-const VERSION = "9";
+const VERSION = "10";
 
 function pageIsCurrent() {
   const meta = document.querySelector('meta[name="waagenspiel-version"]');
@@ -754,8 +657,8 @@ async function main() {
     return;
   }
   const source = new RoundSource(data.levels);
-  const account = new PlayerAccount({ storage: store });
-  const board = new GlobalBoard({ account });
+  store.setItem("waagenspiel.schluessel", ""); // Ueberbleibsel der frueheren Spielernamen
+  const board = new GlobalBoard();
   let app;
   try {
     app = new App({
@@ -764,7 +667,6 @@ async function main() {
       highscores: new Highscores(store),
       sound: new Sound(store),
       board,
-      account,
     });
   } catch (error) {
     $("laden").textContent = "Das Spiel wurde gerade aktualisiert. Bitte die Seite neu laden.";
