@@ -18,7 +18,7 @@
       panItems, panPositions, parseScale, pickCharacters, pointsFor, scaleView, seededRandom, stepsFor,
       penaltyFor, thinkSeconds, SETTLE_SECONDS,
     } from "./spiel.js";
-    import { GlobalBoard, recordOf, validName } from "./bestenliste.js";
+    import { GlobalBoard, rankFor, recordOf, validName } from "./bestenliste.js";
 
     const results = [];
     const test = async (name, fn) => {
@@ -130,19 +130,25 @@
       eq(validName("x".repeat(21)), null);
     });
 
-    await test("Rekord: Name und Punkte gehen mit, 409 meldet den hoeheren Rekord", async () => {
+    await test("Bestenliste: Name und Punkte gehen mit, Platz kommt zurueck", async () => {
       const sent = [];
       const fake = async (url, options) => {
-        const body = new URLSearchParams(options.body);
-        sent.push(Object.fromEntries(body));
-        if (body.get("punkte") === "50") return { status: 409, json: async () => ({ ok: false, fehler: "Inzwischen gibt es einen höheren Rekord: 60 Punkte.", rekord: 60 }) };
-        return { status: 200, json: async () => ({ ok: true, liste: [{ name: "Jörg", punkte: 70, datum: "2026-11-20" }] }) };
+        sent.push(Object.fromEntries(new URLSearchParams(options.body)));
+        return { status: 200, json: async () => ({ ok: true, platz: 2, liste: [{ name: "Ina", punkte: 90, datum: "2026-11-21" }, { name: "Jörg", punkte: 70, datum: "2026-11-21" }] }) };
       };
       const board = new GlobalBoard({ fetchFn: fake });
-      const list = await board.submit("t", "Mittel/30s", 70, "Jörg");
-      eq(list[0].name, "Jörg");
+      const { platz, liste } = await board.submit("t", "Mittel/30s", 70, "Jörg");
+      eq([platz, liste[1].name], [2, "Jörg"]);
       eq(sent[0], { aktion: "eintragen", marke: "t", kategorie: "Mittel/30s", punkte: "70", name: "Jörg" });
-      try { await board.submit("t", "Mittel/30s", 50, "X"); ok(false, "kein Fehler"); } catch (e) { eq([e.status, e.data.rekord], [409, 60]); }
+    });
+
+    await test("Bestenliste: Platz fuer Punkte, Gleichstand hinter den frueheren", () => {
+      const list = [{ punkte: 90 }, { punkte: 70 }, { punkte: 70 }, { punkte: 20 }];
+      eq(rankFor(list, 100), 1);
+      eq(rankFor(list, 70), 4);
+      eq(rankFor(list, 50), 4);
+      eq(rankFor(list, 1), 5);
+      eq(rankFor(undefined, 5), 1);
     });
 
     await test("Rekord: aktueller Rekord ist der erste Eintrag, sonst 0", () => {

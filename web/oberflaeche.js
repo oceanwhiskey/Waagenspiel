@@ -13,7 +13,7 @@ import {
   streakFactor,
 } from "./spiel.js";
 import { ScaleDrawing, animateTilt, character, characterIcon, inlineFigure } from "./figuren.js";
-import { GlobalBoard, recordOf, validName } from "./bestenliste.js";
+import { GlobalBoard, rankFor, recordOf, validName } from "./bestenliste.js";
 
 const $ = (id) => document.getElementById(id);
 const SPOTS = [[118, 40], [242, 200], [118, 360]]; // oben links, Mitte rechts, unten links
@@ -184,7 +184,7 @@ class App {
       : best ? `Dein Rekord: ${best} Punkte` : "Noch kein eigener Rekord – stell den ersten auf!";
     const list = this.timeLimit == null ? null : this.lists?.[Highscores.key(this.difficulty, this.timeLimit)];
     $("weltrekord").textContent = this.timeLimit == null || !this.lists ? ""
-      : list?.length ? `Rekord: ${list[0].name} mit ${list[0].punkte} Punkten` : "Bestenliste: noch kein Rekord – stell den ersten auf!";
+      : list?.length ? `Bestenliste: 1. ${list[0].name} mit ${list[0].punkte} Punkten` : "Bestenliste: noch leer – sei die oder der Erste!";
   }
 
   // --- Bestenliste ---------------------------------------------------------------------
@@ -218,18 +218,18 @@ class App {
   renderBoard() {
     const list = this.lists?.[Highscores.key(this.boardLevel, this.boardTime)] || [];
     $("liste-status").textContent = !this.lists ? "Die Bestenliste ist gerade nicht erreichbar."
-      : list.length ? "" : "Hier gibt es noch keinen Rekord.";
+      : list.length ? "" : "Hier hat sich noch niemand eingetragen.";
     $("liste").replaceChildren(...this.boardRows(list));
   }
 
   boardRows(list) {
     return list.map((entry, i) => {
       const row = document.createElement("li");
-      if (i === 0) row.className = "mine"; // aktueller Rekord
+      if (i === this.markRow?.[`${this.boardLevel}/${this.boardTime}s`]) row.className = "mine"; // eben eingetragen
       const rank = document.createElement("span");
       rank.className = "rank";
-      rank.textContent = i === 0 ? "👑" : "";
-      rank.title = i === 0 ? "aktueller Rekord" : "früherer Rekord";
+      rank.textContent = i === 0 ? "👑" : `${i + 1}.`;
+      if (i === 0) rank.title = "Rekord";
       const who = document.createElement("span");
       who.className = "who";
       who.textContent = entry.name;
@@ -244,7 +244,7 @@ class App {
     });
   }
 
-  /** Nach einer vollen Partie auf Zeit: Bei einem neuen Rekord darf man sich eintragen. */
+  /** Nach einer vollen Partie auf Zeit: Jeder darf sich eintragen. */
   async offerRecord(key, points, token) {
     const box = $("welt");
     $("welt-form").hidden = true;
@@ -258,17 +258,16 @@ class App {
       return;
     }
     const best = recordOf(lists, key);
-    if (points <= best) {
-      const holder = lists[key][0];
-      $("welt-text").textContent = `Rekord in der Bestenliste: ${holder.punkte} Punkte von ${holder.name}.`;
-      return;
-    }
-    this.pending = { key, points, token };
+    const rank = rankFor(lists[key], points);
     const [level, time] = key.split("/");
-    $("welt-text").textContent = `Neuer Rekord in der Bestenliste (${level}, ${time.replace("s", " s")})! Trag dich ein:`;
+    const where = `${level}, ${time.replace("s", " s")}`;
+    this.pending = { key, points, token };
+    $("welt-text").textContent = points > best
+      ? `Neuer Rekord in der Bestenliste (${where})! Trag dich ein:`
+      : `Damit wärst du auf Platz ${rank} der Bestenliste (${where}). Eintragen?`;
     $("welt-feld").value = store.getItem("waagenspiel.spielername") || "";
     $("welt-form").hidden = false;
-    this.confetti();
+    if (points > best) this.confetti();
   }
 
   async submitRecord() {
@@ -281,12 +280,16 @@ class App {
     }
     $("welt-knopf").disabled = true;
     try {
-      const list = await this.board.submit(pending.token, pending.key, pending.points, name);
+      const { platz, liste } = await this.board.submit(pending.token, pending.key, pending.points, name);
       this.pending = null;
       store.setItem("waagenspiel.spielername", name);
-      if (this.lists) this.lists[pending.key] = list;
+      if (this.lists) this.lists[pending.key] = liste;
+      this.markRow = { ...this.markRow, [pending.key]: platz - 1 };
+      [this.boardLevel, this.boardTime] = [pending.key.split("/")[0], parseInt(pending.key.split("/")[1], 10)];
       $("welt-form").hidden = true;
-      $("welt-text").textContent = `Eingetragen: ${name} hält jetzt den Rekord!`;
+      $("welt-text").textContent = platz === 1
+        ? `Eingetragen: ${name} hält jetzt den Rekord!`
+        : `Eingetragen auf Platz ${platz}.`;
     } catch (error) {
       $("welt-text").textContent = error.message;
       if (error.status !== 400) { // Name falsch: nochmal versuchen; sonst ist es vorbei
@@ -627,7 +630,7 @@ class App {
 // Muss zu <meta name="waagenspiel-version"> in index.html passen; bei jedem Update
 // beider Dateien erhoehen. Passt es nicht (alte Seite aus dem Browser-Cache, neues
 // Skript), wird die Seite einmal neu geladen.
-const VERSION = "10";
+const VERSION = "11";
 
 function pageIsCurrent() {
   const meta = document.querySelector('meta[name="waagenspiel-version"]');

@@ -1,17 +1,17 @@
 <?php
-// Bestenliste als Rekord-Historie.
+// Bestenliste: Jeder darf sich eintragen.
 //
-// Je Kategorie (Schwierigkeit/Zeit, z. B. "Mittel/60s") werden alle Rekorde
-// aufgehoben: Wer den bisherigen Rekord bricht, traegt sich mit einem frei
-// gewaehlten Namen ein, und der alte Rekord bleibt darunter stehen. Es gibt keine
-// Anmeldung und keine Spielerkonten.
+// Nach jeder vollen Partie auf Zeit kann man das Ergebnis mit einem frei
+// gewaehlten Namen eintragen (einmal je Partie). Alle Eintraege bleiben stehen;
+// angezeigt werden je Kategorie (Schwierigkeit/Zeit, z. B. "Mittel/60s") die
+// besten. Es gibt keine Anmeldung und keine Spielerkonten. Die Tabelle heisst aus
+// historischen Gruenden "rekord".
 //
 //   GET  bestenliste.php                     -> {"listen": {kategorie: [{name, punkte, datum}, ...]}}
-//                                               (hoechster = aktueller Rekord zuerst)
+//                                               (bester zuerst)
 //   POST bestenliste.php  aktion=start       -> {"marke": "..."}           (beim Spielstart)
-//   POST bestenliste.php  aktion=eintragen   -> {"liste": [...]}
+//   POST bestenliste.php  aktion=eintragen   -> {"platz": n, "liste": [...]}
 //        Felder: marke, kategorie, punkte, name
-//        Kein Rekord (mehr): 409 mit "rekord" (aktueller Rekord).
 //
 // Schutz gegen einfaches Schummeln: Die Marke ist signiert, nur einmal gueltig
 // und erst nach Ablauf der Spielzeit einloesbar; die Punkte muessen zur
@@ -24,7 +24,7 @@ require __DIR__ . '/inc/gemeinsam.php';
 const STUFEN = ['Steigend', 'Leicht', 'Mittel', 'Schwer', 'Profi'];
 const ZEITEN = [30, 60, 90, 120];
 const PUNKTE_JE_SEKUNDE = 150;  // hoechstens 120 Punkte je Runde (Profi, Serie x3), mindestens ~0,8 s je Runde
-const HISTORIE = 50;            // so viele Rekorde je Kategorie werden angezeigt
+const ANZEIGE = 100;            // so viele Eintraege je Kategorie werden angezeigt
 
 function kategorie_pruefen(string $kategorie): int {
     if (!preg_match('~^([A-Za-z]+)/(\d+)s$~', $kategorie, $m) || !in_array($m[1], STUFEN, true)
@@ -36,16 +36,10 @@ function kategorie_pruefen(string $kategorie): int {
 
 function liste(string $kategorie): array {
     $stmt = db()->prepare('SELECT name, punkte, erreicht FROM ' . t('rekord')
-        . ' WHERE kategorie = ? ORDER BY punkte DESC, erreicht ASC LIMIT ' . HISTORIE);
+        . ' WHERE kategorie = ? ORDER BY punkte DESC, id ASC LIMIT ' . ANZEIGE);
     $stmt->execute([$kategorie]);
     return array_map(fn ($z) => ['name' => $z['name'], 'punkte' => (int) $z['punkte'], 'datum' => substr($z['erreicht'], 0, 10)],
         $stmt->fetchAll());
-}
-
-function rekord(string $kategorie): int {
-    $stmt = db()->prepare('SELECT MAX(punkte) FROM ' . t('rekord') . ' WHERE kategorie = ?');
-    $stmt->execute([$kategorie]);
-    return (int) $stmt->fetchColumn();
 }
 
 $methode = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -101,13 +95,6 @@ if ($punkte === false || $punkte < 1 || $punkte > $sekunden * PUNKTE_JE_SEKUNDE)
 $name = name_pruefen(eingabe('name'));
 
 // --- Eintragen ---------------------------------------------------------------------------------
-// Zwei gleichzeitige Rekorde werden nacheinander geprueft. Die Sperre endet spaetestens mit der
-// Verbindung, also auch, wenn fehler() das Skript vorher beendet.
-$pdo->query('SELECT GET_LOCK(' . $pdo->quote(t('rekord')) . ', 5)')->fetchColumn();
-$bisher = rekord($kategorie);
-if ($punkte <= $bisher) {
-    fehler('Inzwischen gibt es einen höheren Rekord: ' . $bisher . ' Punkte.', 409, ['rekord' => $bisher]);
-}
 $kennung = substr($teile[1], 0, 32);
 $pdo->prepare('DELETE FROM ' . t('marke') . ' WHERE benutzt < ?')->execute([gmdate('Y-m-d H:i:s', time() - 86400)]);
 try {
@@ -117,6 +104,9 @@ try {
 }
 $pdo->prepare('INSERT INTO ' . t('rekord') . ' (kategorie, name, punkte, erreicht) VALUES (?, ?, ?, ?)')
     ->execute([$kategorie, $name, $punkte, jetzt()]);
-$pdo->query('SELECT RELEASE_LOCK(' . $pdo->quote(t('rekord')) . ')')->fetchColumn();
+$id = (int) $pdo->lastInsertId();
 
-antwort(['liste' => liste($kategorie)]);
+// Platz: alle mit mehr Punkten, bei Gleichstand die frueheren davor
+$stmt = $pdo->prepare('SELECT COUNT(*) FROM ' . t('rekord') . ' WHERE kategorie = ? AND (punkte > ? OR (punkte = ? AND id < ?))');
+$stmt->execute([$kategorie, $punkte, $punkte, $id]);
+antwort(['platz' => (int) $stmt->fetchColumn() + 1, 'liste' => liste($kategorie)]);

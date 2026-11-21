@@ -1,8 +1,8 @@
 // Verbindung zu bestenliste.php. Keine Oberflaeche.
 //
-// Die Bestenliste ist eine Rekord-Historie je Schwierigkeit und Zeit: Wer den
-// Rekord bricht, traegt sich mit einem frei gewaehlten Namen ein. Es gibt keine
-// Anmeldung; der zuletzt benutzte Name wird nur im Browser vorgeschlagen.
+// Nach jeder vollen Partie auf Zeit darf man sich mit einem frei gewaehlten Namen
+// in die Bestenliste eintragen. Es gibt keine Anmeldung; der zuletzt benutzte
+// Name wird nur im Browser vorgeschlagen.
 
 async function request(fetchFn, url, body) {
   const headers = { Accept: "application/json" };
@@ -29,7 +29,7 @@ export class GlobalBoard {
     Object.assign(this, { url, fetchFn });
   }
 
-  /** {kategorie: [{name, punkte, datum}, ...]}, hoechster (aktueller) Rekord zuerst. */
+  /** {kategorie: [{name, punkte, datum}, ...]}, bester zuerst. */
   async lists() {
     return (await request(this.fetchFn, this.url)).listen || {};
   }
@@ -39,16 +39,22 @@ export class GlobalBoard {
     return (await request(this.fetchFn, this.url, { aktion: "start", kategorie: category })).marke;
   }
 
-  /** Rekord eintragen: liefert die neue Liste der Kategorie. Kein Rekord mehr: Fehler 409. */
+  /** Ergebnis eintragen: {platz, liste} (neue Liste der Kategorie). */
   async submit(token, category, points, name) {
-    return (await request(this.fetchFn, this.url,
-      { aktion: "eintragen", marke: token, kategorie: category, punkte: points, name })).liste;
+    const data = await request(this.fetchFn, this.url,
+      { aktion: "eintragen", marke: token, kategorie: category, punkte: points, name });
+    return { platz: data.platz, liste: data.liste };
   }
 }
 
 /** Aktueller Rekord einer Kategorie (0, wenn noch keiner steht). */
 export function recordOf(lists, category) {
   return lists?.[category]?.[0]?.punkte ?? 0;
+}
+
+/** Platz, den `points` in der Liste haetten (bei Gleichstand hinter den frueheren). */
+export function rankFor(list, points) {
+  return (list || []).filter((entry) => entry.punkte >= points).length + 1;
 }
 
 /** Erlaubte Namen wie auf dem Server: 1-20 Zeichen, Buchstaben, Ziffern, Leerzeichen, . _ - ! ? */

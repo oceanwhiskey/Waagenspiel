@@ -7,10 +7,9 @@ Dienste. Alles läuft auf dem vorhandenen Webspace bei Biohost (PHP 7.4, MySQL
 
 > **Stand November 2026: Spielernamen wurden wieder abgeschafft.** Nach dem
 > Ausprobieren (erst mit Übertragungscode, dann mit einem Tag Sperre) war
-> beides zu umständlich. Jetzt gilt: Wer in einer vollen Partie auf Zeit den
-> Rekord bricht, trägt einen frei gewählten Namen ein. Alle Rekorde bleiben
-> als Historie stehen (Tabelle `ws_rekord`: kategorie, name, punkte,
-> erreicht). Abschnitt 2 und die Spielernamen-Teile unten beschreiben den
+> beides zu umständlich. Jetzt gilt: Nach jeder vollen Partie auf Zeit kann
+> sich jeder mit einem frei gewählten Namen eintragen. Alle Einträge bleiben
+> stehen (Tabelle `ws_rekord`: id, kategorie, name, punkte, erreicht). Abschnitt 2 und die Spielernamen-Teile unten beschreiben den
 > verworfenen Entwurf; für Duelle und Tagesrätsel müsste man neu überlegen,
 > wie Teilnehmer ohne Konto erkannt werden.
 

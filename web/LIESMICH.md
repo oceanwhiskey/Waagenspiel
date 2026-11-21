@@ -58,11 +58,11 @@ deshalb sind die Lösungsschritte vorberechnet. Mehr Rätsel je Stufe:
 ## Bestenliste
 
 Eigene Rekorde und Einstellungen liegen nur im Browser des Geräts
-(`localStorage`). Dazu kommt eine **Bestenliste als Rekord-Historie** je
-Schwierigkeit und Zeit (`bestenliste.php`, `inc/gemeinsam.php`,
-`bestenliste.js`): Wer den Rekord in einer vollen Partie auf Zeit bricht, trägt
-sich mit einem frei gewählten Namen ein; frühere Rekorde bleiben darunter
-stehen. Es gibt keine Anmeldung und keine Spielerkonten.
+(`localStorage`). Dazu kommt eine **Bestenliste** je Schwierigkeit und Zeit
+(`bestenliste.php`, `inc/gemeinsam.php`, `bestenliste.js`): Nach jeder vollen
+Partie auf Zeit kann sich jeder mit einem frei gewählten Namen eintragen
+(einmal je Partie). Alle Einträge bleiben stehen; angezeigt werden die besten
+100 je Kategorie. Es gibt keine Anmeldung und keine Spielerkonten.
 
 - Braucht PHP (ab 7.4) und eine MySQL-Datenbank. Die Zugangsdaten liegen in
   `waagenspiel-config/db.ini` **außerhalb** der Webseiten (die PHP-Dateien
@@ -74,8 +74,9 @@ stehen. Es gibt keine Anmeldung und keine Spielerkonten.
   Spielmarke. Der Server nimmt sie erst nach Ablauf der Spielzeit an, nur
   einmal und nur mit glaubwürdigen Punkten (höchstens 150 je Sekunde). Wer es
   darauf anlegt, kann im Browser trotzdem schummeln.
-- Zurücksetzen: Tabelle `ws_rekord` leeren. Einen unpassenden Eintrag
-  entfernen: seine Zeile in `ws_rekord` löschen.
+- Die Einträge stehen in der Tabelle `ws_rekord` (der Name stammt aus der
+  Zeit, als nur Rekorde zählten). Zurücksetzen: Tabelle leeren. Einen
+  unpassenden Eintrag entfernen: seine Zeile löschen.
 - Ohne PHP und Datenbank läuft das Spiel ganz normal, nur ohne Bestenliste.
 - `datenschutz.html` beschreibt, was gespeichert wird. `impressum.html`
   enthält die Anbieterangaben.
