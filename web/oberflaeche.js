@@ -7,13 +7,11 @@ import {
   Highscores,
   LEVEL_TITLES,
   RoundSource,
-  explainParts,
   pickCharacters,
-  stepsFor,
   streakFactor,
 } from "./spiel.js";
 import { ScaleDrawing, animateTilt, character, characterIcon, inlineFigure } from "./figuren.js";
-import { GlobalBoard, rankFor, recordOf, validName } from "./bestenliste.js";
+import { GlobalBoard, PuzzleServer, rankFor, recordOf, validName } from "./bestenliste.js";
 
 const $ = (id) => document.getElementById(id);
 const SPOTS = [[118, 40], [242, 200], [118, 360]]; // oben links, Mitte rechts, unten links
@@ -68,8 +66,8 @@ class Sound {
 // --- Fenster ----------------------------------------------------------------------
 
 class App {
-  constructor({ makeSession, highscores, sound, board }) {
-    Object.assign(this, { makeSession, highscores, sound, board });
+  constructor({ makeSession, highscores, sound, board, source, server }) {
+    Object.assign(this, { makeSession, highscores, sound, board, source, server });
     this.lists = null; // Top 10 je Kategorie, sobald geladen
     this.boardTime = 60;
     this.boardLevel = "Steigend";
@@ -82,7 +80,6 @@ class App {
     this.round = null;
     this.accepting = false;
     this.timers = new Set();
-    this.hintIndex = 0;
     this.preview = pickCharacters(Math.random);
     this.bind();
     this.showStart();
@@ -101,7 +98,6 @@ class App {
 
   show(id) {
     for (const s of ["start", "spiel", "ende", "bestenliste"]) $(s).hidden = s !== id;
-    $("blatt").hidden = true;
   }
 
   bind() {
@@ -109,13 +105,7 @@ class App {
     $("nochmal").onclick = () => this.startGame();
     $("menue").onclick = () => this.showStart();
     $("zurueck").onclick = () => this.leave();
-    $("tipp").onclick = () => this.showHint();
-    $("blatt-mehr").onclick = () => this.showHint();
-    $("blatt-ok").onclick = () => this.closeSheet();
-    $("blatt-kopf").onclick = () => {
-      const closed = $("blatt").classList.toggle("zu");
-      $("blatt-kopf").setAttribute("aria-expanded", String(!closed));
-    };
+    $("weiter").onclick = () => this.nextRound();
     $("ton").onclick = () => { this.sound.toggle(); this.updateSoundLabel(); };
     $("zur-bestenliste").onclick = () => this.showBoard();
     $("liste-zurueck").onclick = () => this.showStart();
@@ -132,10 +122,9 @@ class App {
     if (!$("start").hidden && key === "enter") return this.startGame();
     if (!$("ende").hidden && key === "enter") return this.startGame();
     if (["1", "2", "3", "4"].includes(key) && this.accepting) return this.choose(Number(key) - 1);
-    if (key === "h" && this.session?.isPractice && this.accepting) return this.showHint();
-    if ((key === "enter" || key === " ") && !$("blatt").hidden) {
+    if ((key === "enter" || key === " ") && !$("weiter").hidden && !$("spiel").hidden) {
       e.preventDefault();
-      this.closeSheet();
+      this.nextRound();
     }
   }
 
@@ -333,7 +322,6 @@ class App {
     this.session = this.makeSession(this.difficulty, this.timeLimit, this.preview);
     this.show("spiel");
     const practice = this.session.isPractice;
-    $("tipp").hidden = !practice;
     $("uhr").hidden = practice;
     $("zeitbalken").hidden = practice;
     this.drawCards();
@@ -435,7 +423,7 @@ class App {
     this.round = s.current;
     this.updateHeader();
     this.resetCards();
-    $("blatt").hidden = true;
+    $("weiter").hidden = true;
     $("karten").hidden = false;
     const msg = $("nachricht");
     msg.className = "message";
@@ -443,7 +431,6 @@ class App {
     const field = $("feld");
     field.replaceChildren();
     this.drawings = this.round.views.map((view, k) => new ScaleDrawing(field, ...SPOTS[k], view, s.characters));
-    this.hintIndex = 0;
     this.accepting = true;
     this.showPenalty();
     animateTilt(this.drawings);
@@ -464,8 +451,12 @@ class App {
     if (!this.accepting || !this.session) return;
     this.accepting = false;
     $("abzug").textContent = "";
-    this.lostStreak = this.session.isPractice ? 0 : this.session.streak;
-    const feedback = this.session.answer(choice);
+    const s = this.session;
+    this.lostStreak = s.isPractice ? 0 : s.streak;
+    const round = s.current;
+    const ms = Math.round((s.clock() - s.shownAt) * 1000);
+    const feedback = s.answer(choice);
+    this.server.report(round.id, s.isPractice ? "ueben" : "zeit", feedback.correct, ms);
     this.updateHeader();
     if (feedback.correct) this.celebrate(choice, feedback);
     else this.reveal(choice, feedback);
@@ -518,59 +509,13 @@ class App {
       + (this.lostStreak >= 1 ? "  Serie vorbei, Faktor wieder ×1." : ""));
     if (feedback.points) this.floatPoints(this.cards[choice], `${feedback.points}`.replace("-", "−"), true);
     if (s.isPractice) {
-      const lines = stepsFor(this.round, choice).flatMap((step) => step.text);
-      $("karten").hidden = true; // Antwort steht fest: Platz fuer Erklaerung und Waagen
-      const title = ["Warum ist ", inlineFigure(s.characters[choice]), " leichter als ",
-        inlineFigure(s.characters[feedback.answer]), "?"];
-      this.openSheet(title, lines, { more: false, ok: "Weiter" });
-      this.afterSheet = () => this.nextRound();
+      // Ohne Uhr: in Ruhe die Waagen anschauen, dann selbst weiter
+      $("karten").hidden = true;
+      $("weiter").hidden = false;
+      $("weiter").focus();
     } else {
       this.later(1000, () => this.nextRound());
     }
-  }
-
-  showHint() {
-    if (!this.accepting || !this.session?.isPractice) return;
-    const hints = this.round.hints;
-    if (!hints.length) return;
-    const index = Math.min(this.hintIndex, hints.length - 1);
-    this.hintIndex = index + 1;
-    this.openSheet(`Tipp ${index + 1} von ${hints.length}`, hints[index], {
-      more: this.hintIndex < hints.length,
-      ok: "OK",
-    });
-    this.afterSheet = null;
-  }
-
-  openSheet(title, lines, { more, ok }) {
-    const s = this.session;
-    $("blatt-titel").replaceChildren(...(Array.isArray(title) ? title : [title]));
-    const list = $("blatt-text");
-    list.replaceChildren(...lines.map((line) => {
-      const li = document.createElement("li");
-      li.replaceChildren(...this.richLine(line));
-      return li;
-    }));
-    $("blatt-mehr").hidden = !more;
-    $("blatt-ok").textContent = ok;
-    $("blatt").classList.remove("zu");
-    $("blatt-kopf").setAttribute("aria-expanded", "true");
-    $("blatt").hidden = false;
-    list.scrollTop = 0;
-  }
-
-  /** Erklaerzeile mit kleinen Figuren statt Namen, z. B. "3× ▲ = ● + ■". */
-  richLine(line) {
-    const characters = this.session.characters;
-    return explainParts(line, this.round).flatMap((part) =>
-      "text" in part ? [part.text] : [part.count > 1 ? `${part.count}×` : "", inlineFigure(characters[part.who])]);
-  }
-
-  closeSheet() {
-    $("blatt").hidden = true;
-    const next = this.afterSheet;
-    this.afterSheet = null;
-    next?.();
   }
 
   nextRound() {
@@ -630,7 +575,7 @@ class App {
 // Muss zu <meta name="waagenspiel-version"> in index.html passen; bei jedem Update
 // beider Dateien erhoehen. Passt es nicht (alte Seite aus dem Browser-Cache, neues
 // Skript), wird die Seite einmal neu geladen.
-const VERSION = "11";
+const VERSION = "12";
 
 function pageIsCurrent() {
   const meta = document.querySelector('meta[name="waagenspiel-version"]');
@@ -659,7 +604,9 @@ async function main() {
     $("laden").textContent = "Die Rätsel konnten nicht geladen werden. Bitte Seite neu laden.";
     return;
   }
-  const source = new RoundSource(data.levels);
+  const server = new PuzzleServer();
+  const source = new RoundSource(data.levels, Math.random, (level, n) => server.batch(level, n));
+  source.prepare(source.levels); // Vorrat vom Server schon vor dem ersten Spiel
   store.setItem("waagenspiel.schluessel", ""); // Ueberbleibsel der frueheren Spielernamen
   const board = new GlobalBoard();
   let app;
@@ -670,6 +617,8 @@ async function main() {
       highscores: new Highscores(store),
       sound: new Sound(store),
       board,
+      source,
+      server,
     });
   } catch (error) {
     $("laden").textContent = "Das Spiel wurde gerade aktualisiert. Bitte die Seite neu laden.";

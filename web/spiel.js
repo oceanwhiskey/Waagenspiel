@@ -1,10 +1,10 @@
 // Spiellogik der Web-Version, ohne jede Oberflaeche (vgl. src/waagenspiel/game.py).
 //
-// Die Raetsel stammen aus dem exakt gepruefen Katalog (docs/03, Abschnitt 9) und
-// werden von webversion.py samt Loesungsschritten nach raetsel.json exportiert.
-// In dieser kanonischen Form ist immer Gegenstand 0 (a) der Schwerste. Fuer jede
-// Runde werden die Gegenstaende umbenannt, die Waagen gemischt und manche
-// gespiegelt.
+// Die Raetsel stammen aus dem exakt gepruefen Katalog (docs/03, Abschnitt 9). Das
+// Spiel holt sie vom Server (raetsel.php, alle Raetsel); raetsel.json ist nur der
+// Notvorrat ohne Netz. In der kanonischen Form ist immer Gegenstand 0 (a) der
+// Schwerste. Fuer jede Runde werden die Gegenstaende umbenannt, die Waagen
+// gemischt und manche gespiegelt.
 
 export const COLORS = [
   ["Rot", "#ef476f"],
@@ -102,7 +102,7 @@ export function scaleView(scale, number, mirrored) {
 // --- Runde ----------------------------------------------------------------
 
 /**
- * Macht aus einem exportierten Raetsel eine Runde.
+ * Macht aus einem Raetsel ({id, s: ["b + c < a", ...]}) eine Runde.
  * perm[i]: neuer Name von Gegenstand i; order[k]: urspruengliche Waage an Platz k.
  */
 export function makeRound(puzzle, level, random, mirror = true) {
@@ -113,73 +113,58 @@ export function makeRound(puzzle, level, random, mirror = true) {
     return { left: renameSide(s.left, perm), op: s.op, right: renameSide(s.right, perm) };
   });
   const views = scales.map((s, k) => scaleView(s, k + 1, mirror && random() < 0.5));
-  const steps = puzzle.steps.map((step) => ({
-    fact: [perm[step.f[0]], perm[step.f[1]]],
-    requires: step.r.map(([u, v]) => [perm[u], perm[v]]),
-    text: step.t,
-  }));
-  // Tipps: zuerst die Abkuerzung (falls es eine gibt), dann die Loesungsschritte
-  const hints = [...(puzzle.k ? [puzzle.k] : []), ...steps.map((s) => s.text)];
-  return { scales, views, answer: perm[0], level, perm, order, steps, hints };
-}
-
-/** Die Schritte, die zeigen, dass `choice` leichter ist als die Antwort. */
-export function stepsFor(round, choice) {
-  const key = ([u, v]) => `${u}<${v}`;
-  const byFact = new Map(round.steps.map((s) => [key(s.fact), s]));
-  const needed = new Set();
-  const todo = [[choice, round.answer]];
-  while (todo.length) {
-    const pair = todo.pop();
-    if (needed.has(key(pair)) || !byFact.has(key(pair))) continue;
-    needed.add(key(pair));
-    todo.push(...byFact.get(key(pair)).requires);
-  }
-  return round.steps.filter((s) => needed.has(key(s.fact)));
-}
-
-/**
- * Zerlegt eine Erklaerzeile in Text und Figuren:
- * [{text: "Waage 2: "}, {count: 3, who: 1}, {text: " = "}, {count: 1, who: 0}, ...].
- * "Waage k" bekommt die gezeigte Nummer, a-d (auch "2a") werden zu Figuren der Runde.
- */
-export function explainParts(line, round) {
-  const renumbered = line.replace(/\bWaage (\d)\b/g, (_, k) => `Waage ${round.order.indexOf(Number(k) - 1) + 1}`);
-  const parts = [];
-  let last = 0;
-  for (const match of renumbered.matchAll(/\b(\d*)([abcd])\b/g)) {
-    if (match.index > last) parts.push({ text: renumbered.slice(last, match.index) });
-    parts.push({ count: match[1] ? Number(match[1]) : 1, who: round.perm[LETTERS.indexOf(match[2])] });
-    last = match.index + match[0].length;
-  }
-  if (last < renumbered.length) parts.push({ text: renumbered.slice(last) });
-  return parts;
-}
-
-/** Wie explainParts, aber als Text mit Figurennamen (z. B. "3× Lila"). */
-export function explain(line, round, characters) {
-  return explainParts(line, round)
-    .map((p) => ("text" in p ? p.text : p.count > 1 ? `${p.count}× ${characters[p.who].name}` : characters[p.who].name))
-    .join("");
+  return { id: puzzle.id, scales, views, answer: perm[0], level, perm, order };
 }
 
 // --- Raetselquelle ----------------------------------------------------------
 
+/**
+ * Liefert Runden je Stufe. Mit `fetchBatch(level, n)` (Promise einer Liste von
+ * Raetseln) haelt sie je Stufe einen kleinen Vorrat vom Server bereit; ist er leer
+ * (kein Netz, Server langsam), kommt das Raetsel aus dem Notvorrat `levels`.
+ */
 export class RoundSource {
-  constructor(levels, random = Math.random) {
-    this.all = levels; // {"1": [puzzle, ...], ...}
-    this.random = random;
+  constructor(levels, random = Math.random, fetchBatch = null, clock = () => Date.now()) {
+    this.all = levels; // Notvorrat: {"1": [puzzle, ...], ...}
+    Object.assign(this, { random, fetchBatch, clock });
     this.pools = {};
+    this.queues = {};
+    this.loading = {};
+    this.pauseUntil = 0; // nach einem Fehler eine Weile nicht nachfragen
   }
 
   get levels() {
     return Object.keys(this.all).map(Number).sort();
   }
 
+  /** Holt im Hintergrund Raetsel fuer diese Stufen nach. */
+  prepare(levels) {
+    if (!this.fetchBatch || this.clock() < this.pauseUntil) return;
+    for (const level of levels) {
+      if (!this.all[level]) continue;
+      const queue = (this.queues[level] ??= []);
+      if (queue.length >= 5 || this.loading[level]) continue;
+      this.loading[level] = this.fetchBatch(level, 20)
+        .then((puzzles) => {
+          if (!puzzles.length) this.pauseUntil = this.clock() + 60000; // Server hat (noch) keine
+          queue.push(...puzzles);
+        })
+        .catch(() => (this.pauseUntil = this.clock() + 30000))
+        .finally(() => (this.loading[level] = null));
+    }
+  }
+
   next(level) {
+    const queue = this.queues[level];
+    const puzzle = queue?.length ? queue.shift() : this.spare(level);
+    this.prepare([level - 1, level, level + 1]);
+    return makeRound(puzzle, level, this.random);
+  }
+
+  spare(level) {
     let pool = this.pools[level];
     if (!pool || !pool.length) pool = this.pools[level] = shuffle(this.all[level], this.random);
-    return makeRound(pool.pop(), level, this.random);
+    return pool.pop();
   }
 }
 

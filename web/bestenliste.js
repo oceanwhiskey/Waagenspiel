@@ -1,4 +1,4 @@
-// Verbindung zu bestenliste.php. Keine Oberflaeche.
+// Verbindung zum Server (bestenliste.php, raetsel.php). Keine Oberflaeche.
 //
 // Nach jeder vollen Partie auf Zeit darf man sich mit einem frei gewaehlten Namen
 // in die Bestenliste eintragen. Es gibt keine Anmeldung; der zuletzt benutzte
@@ -44,6 +44,30 @@ export class GlobalBoard {
     const data = await request(this.fetchFn, this.url,
       { aktion: "eintragen", marke: token, kategorie: category, punkte: points, name });
     return { platz: data.platz, liste: data.liste };
+  }
+}
+
+/** Raetsel vom Server und anonyme Zaehler je Raetsel (gespielt, richtig, Bedenkzeit). */
+export class PuzzleServer {
+  constructor({ url = "raetsel.php", fetchFn = (...a) => fetch(...a), beacon = navigator.sendBeacon?.bind(navigator) } = {}) {
+    Object.assign(this, { url, fetchFn, beacon });
+  }
+
+  /** Zufaellige Raetsel einer Stufe: [{id, s: [...]}, ...]; leer, wenn der Server keine hat. */
+  async batch(level, count) {
+    return (await request(this.fetchFn, `${this.url}?stufe=${level}&anzahl=${count}`)).raetsel || [];
+  }
+
+  /** Meldet eine Antwort; ohne Netz geht sie verloren, das ist egal. */
+  report(id, mode, correct, ms) {
+    if (id == null) return;
+    const body = new URLSearchParams({ aktion: "antwort", id, modus: mode, richtig: correct ? 1 : 0, ms: Math.max(0, ms) });
+    try {
+      if (this.beacon?.(this.url, body)) return;
+      this.fetchFn(this.url, { method: "POST", body, keepalive: true }).catch(() => {});
+    } catch {
+      /* egal */
+    }
   }
 }
 

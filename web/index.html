@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#eaf6ff">
-  <meta name="waagenspiel-version" content="11">
+  <meta name="waagenspiel-version" content="12">
   <meta name="description" content="Waagen-Spiel: Schau dir die Waagen an und finde die schwerste Figur.">
   <title>Waagen-Spiel</title>
   <link rel="manifest" href="manifest.webmanifest">
@@ -44,24 +44,13 @@
         <span id="faktor" class="factor" title="Serienfaktor für den nächsten Treffer"></span>
         <span id="punkte" class="points"></span>
         <span id="uhr" class="clock"></span>
-        <button id="tipp" class="small gold" hidden>Tipp</button>
       </header>
       <div id="zeitbalken" class="timebar"><div></div></div>
       <div id="stufe" class="level"></div>
       <svg id="feld" viewBox="0 0 360 476" preserveAspectRatio="xMidYMid meet" aria-label="Waagen"></svg>
       <p id="nachricht" class="message" aria-live="polite"></p>
       <p id="abzug" class="penalty"></p>
-      <!-- Erklaerung (Ueben): im Ablauf, damit die Waagen sichtbar bleiben -->
-      <aside id="blatt" class="sheet" hidden>
-        <button id="blatt-kopf" class="sheet-head" type="button" aria-expanded="true">
-          <span id="blatt-titel"></span><span class="chevron" aria-hidden="true">▾</span>
-        </button>
-        <ul id="blatt-text"></ul>
-        <div class="sheet-buttons">
-          <button id="blatt-mehr" class="small gold">Nächster Tipp</button>
-          <button id="blatt-ok" class="small good">OK</button>
-        </div>
-      </aside>
+      <button id="weiter" class="big good next" hidden>Weiter</button>
       <div id="karten" class="cards"></div>
     </section>
 

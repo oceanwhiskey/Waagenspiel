@@ -45,15 +45,37 @@ Spiellogik laufen unter <http://localhost:8000/tests.html>.
 | `spiel.js` | Spiellogik ohne Oberfläche: Runden, Partie, Punkte, Stufen, Bestenliste |
 | `figuren.js` | SVG-Zeichnungen der Figuren und Waagen |
 | `oberflaeche.js` | Bildschirme, Eingaben, Animationen; bekommt die Partie von außen |
-| `raetsel.json` | 1 600 Rätsel (400 je Stufe) mit Lösungsschritten, erzeugt mit `python webversion.py` |
+| `raetsel.php` | Rätsel aus der Datenbank (alle 115 775) und anonyme Zähler je Rätsel |
+| `raetsel.json` | Notvorrat ohne Netz: 4 000 Rätsel (1 000 je Stufe), erzeugt mit `python webversion.py` |
+| `verwaltung.php` | Rätsel einspielen, Sicherung holen und zurückspielen (nur mit Verwaltungsschlüssel) |
 | `spiel.css` | Aussehen |
 | `bestenliste.js`, `bestenliste.php` | Globale Bestenliste (Browser und Server) |
 | `sw.js`, `manifest.webmanifest`, `icon*` | Installierbar und offline spielbar; der Service Worker speichert nur die Spieldateien |
 
 Die Rätsel stammen aus dem exakt geprüften Katalog: Jedes hat genau eine
-schwerste Figur, und jede Waage wird gebraucht. Im Browser läuft kein Löser,
-deshalb sind die Lösungsschritte vorberechnet. Mehr Rätsel je Stufe:
-`python webversion.py --je-stufe 800`.
+schwerste Figur, und jede Waage wird gebraucht. Ihre feste `id` ist die
+Position in `data/katalog.json.gz`; der Katalog darf deshalb nur hinten
+ergänzt, nicht umsortiert werden. Das Spiel holt sie vom Server und hält je
+Stufe einen kleinen Vorrat bereit; ohne Netz nimmt es den Notvorrat aus
+`raetsel.json`. Tipps und Erklärungen gibt es nicht mehr (Menschen lösen
+anders als die Herleitung).
+
+## Rätsel-Datenbank, Statistik und Sicherung
+
+- `python webversion.py` schreibt `web/raetsel.json` und `build/raetsel.tsv.gz`
+  (alle Rätsel für die Datenbank).
+- `python werkzeuge/datenbank.py einspielen` lädt sie in Portionen hoch und
+  tauscht die Tabelle erst am Ende aus; das Spiel läuft dabei weiter.
+- Je Rätsel und Modus (`zeit`, `ueben`) zählt der Server nur `gespielt`,
+  `richtig` und die Summe der Bedenkzeit (`zeit_ms`, je Antwort höchstens
+  10 Minuten). Nichts davon lässt sich einer Person zuordnen.
+- `python werkzeuge/datenbank.py sichern` holt Bestenliste und Statistik als
+  `waagenspiel-JJJJ-MM-TT-HHMMSS.json.gz`; `zurueckspielen DATEI` spielt eine
+  Sicherung zurück. Die Rätsel selbst sind nicht in der Sicherung, sie lassen
+  sich jederzeit neu einspielen.
+- Einstellungen in `~/.waagenspiel/datenbank.ini` (Abschnitt `[verwaltung]`
+  mit `url`, `schluessel`, `sicherungen`). Derselbe Schlüssel liegt auf dem
+  Server in `waagenspiel-config/verwaltung.txt` neben `db.ini`.
 
 ## Bestenliste
 

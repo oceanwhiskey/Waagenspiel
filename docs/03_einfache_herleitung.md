@@ -596,7 +596,9 @@ nebeneinander, eine dritte mittig obendrauf, gleiche nebeneinander.
 - **Üben**: ohne Uhr. Eine Leiste rechts zeigt auf Wunsch die Lösungsschritte
   (Abschnitt 8). Nach einer falschen Antwort erklärt sie, warum die gewählte
   Figur leichter ist als die richtige. Das ist der Farkas-Beweis aus Abschnitt 3,
-  mit den Namen der Figuren.
+  mit den Namen der Figuren. (Nur in der Python-Version; die Web-Version zeigt
+  nach einer falschen Antwort nur die richtige Figur, weil Menschen anders
+  lösen als die Herleitung.)
 - **Punkte** (nur auf Zeit): Ein Rätsel der Stufe $s$ ist $10s$ Punkte wert.
   Richtig gibt den Wert mal Serienfaktor: $	imes 1$ beim ersten Treffer,
   $+0{,}25$ je weiteren Treffer in Folge, höchstens $	imes 3$. Falsch kostet
@@ -623,9 +625,11 @@ manche gespiegelt.
 | Tests der Spiellogik | `tests/test_game.py` |
 
 Die Web-Version für Handy und Browser liegt in `web/`. Sie hat dieselben Modi
-und eine eigene Spiellogik in JavaScript. Ihre Rätsel samt Lösungsschritten
-exportiert `python webversion.py` aus dem Katalog. Zum Hochladen siehe
-`web/LIESMICH.md`.
+und eine eigene Spiellogik in JavaScript. Sie holt alle Rätsel des Katalogs
+aus einer Datenbank auf dem Server und zählt dort anonym je Rätsel, wie oft es
+gespielt und richtig gelöst wurde; daraus soll ein Schwierigkeitsmaß entstehen,
+das zu Menschen passt. `python webversion.py` exportiert die Rätsel. Zum
+Hochladen siehe `web/LIESMICH.md`.
 
 ### 12.1 Was am alten Spiel (`game_of_scales/`, inzwischen gelöscht) falsch war
 

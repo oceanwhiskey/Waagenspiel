@@ -14,11 +14,11 @@
   <ul id="out"></ul>
   <script type="module">
     import {
-      FixedDifficulty, GameSession, Highscores, RisingDifficulty, RoundSource, explain, explainParts, makeRound,
-      panItems, panPositions, parseScale, pickCharacters, pointsFor, scaleView, seededRandom, stepsFor,
+      FixedDifficulty, GameSession, Highscores, RisingDifficulty, RoundSource, makeRound,
+      panItems, panPositions, parseScale, pickCharacters, pointsFor, scaleView, seededRandom,
       penaltyFor, thinkSeconds, SETTLE_SECONDS,
     } from "./spiel.js";
-    import { GlobalBoard, rankFor, recordOf, validName } from "./bestenliste.js";
+    import { GlobalBoard, PuzzleServer, rankFor, recordOf, validName } from "./bestenliste.js";
 
     const results = [];
     const test = async (name, fn) => {
@@ -44,7 +44,7 @@
       levels: [],
       next(level) {
         this.levels.push(level);
-        return makeRound({ s: ["b < a", "c < a", "d < a"], steps: [] }, level, seededRandom(1), false);
+        return makeRound({ id: 7, s: ["b < a", "c < a", "d < a"] }, level, seededRandom(1), false);
       },
     };
 
@@ -97,30 +97,11 @@
       ok(Object.values(data.levels).every((p) => p.length >= 300));
     });
 
-    await test("Erklaerung zeigt, warum die Wahl leichter ist, mit Namen und neuen Nummern", () => {
-      const puzzle = data.levels["4"][0];
-      const ch = pickCharacters(seededRandom(3));
-      const round = makeRound(puzzle, 4, seededRandom(5));
-      const wrong = [0, 1, 2, 3].find((i) => i !== round.answer);
-      const steps = stepsFor(round, wrong);
-      ok(steps.length > 0, "keine Schritte");
-      const last = steps.at(-1);
-      eq(last.fact, [wrong, round.answer]);
-      const text = last.text.map((line) => explain(line, round, ch)).join(" ");
-      ok(text.includes(ch[wrong].name) && text.includes(ch[round.answer].name), text);
-      ok(!/\b\d*[abcd]\b/.test(text), text);
-    });
-
-    await test("Abkuerzung ist der erste Tipp, mit dem Namen der Antwort", () => {
-      const withShortcut = Object.values(data.levels).flat().filter((p) => p.k);
-      ok(withShortcut.length > 0, "keine Raetsel mit Abkuerzung");
-      ok(data.levels["1"].includes(withShortcut[0]) && withShortcut.every((p) => data.levels["1"].includes(p)),
-        "Abkuerzung ausserhalb von Stufe 1");
-      const ch = pickCharacters(seededRandom(4));
-      const round = makeRound(withShortcut[0], 1, seededRandom(6));
-      eq(round.hints.length, round.steps.length + 1);
-      const text = round.hints[0].map((line) => explain(line, round, ch)).join(" ");
-      ok(text.includes(`also ist es ${ch[round.answer].name}.`), text);
+    await test("Notvorrat: jedes Raetsel hat eine eigene id und keine Loesungsschritte", () => {
+      const all = Object.values(data.levels).flat();
+      eq(new Set(all.map((p) => p.id)).size, all.length);
+      ok(all.every((p) => Number.isInteger(p.id) && !("steps" in p) && !("k" in p)));
+      eq(makeRound(all[0], 1, seededRandom(1)).id, all[0].id);
     });
 
     await test("Bestenliste: Namen werden wie auf dem Server geprueft", () => {
@@ -166,24 +147,51 @@
       try { await offline.lists(); ok(false); } catch (e) { ok(e.message.includes("nicht erreichbar")); }
     });
 
-    await test("Erklaerzeile zerfaellt in Text und Figuren der Runde", () => {
-      const round = makeRound({ s: ["b < a", "c < a", "d < a"], steps: [] }, 1, seededRandom(3));
-      const parts = explainParts("Waage 2: 3b + a = 2c", round);
-      eq(parts[0], { text: `Waage ${round.order.indexOf(1) + 1}: ` });
-      eq(parts[1], { count: 3, who: round.perm[1] });
-      eq(parts[3], { count: 1, who: round.perm[0] });
-      eq(parts[5], { count: 2, who: round.perm[2] });
-      eq(parts.filter((p) => "who" in p).length, 3);
+    await test("Quelle nimmt Raetsel vom Server und faellt ohne Netz auf den Notvorrat zurueck", async () => {
+      const spare = { 1: [{ id: 1, s: ["b < a", "c < a", "d < a"] }], 2: [{ id: 2, s: ["b < a", "c < a", "d < a"] }] };
+      const asked = [];
+      let online = true;
+      const fetchBatch = async (level, n) => {
+        asked.push(level);
+        if (!online) throw new Error("offline");
+        return Array.from({ length: 3 }, (_, i) => ({ id: 1000 * level + i, s: ["b < a", "c < a", "d < a"] }));
+      };
+      let now = 0;
+      const source = new RoundSource(spare, seededRandom(1), fetchBatch, () => now);
+      source.prepare([1]);
+      await new Promise((r) => setTimeout(r, 0));
+      eq(source.next(1).id, 1000);
+      eq(source.next(1).id, 1001);
+      ok(asked.includes(2), "naechste Stufe wird schon vorbereitet");
+      await new Promise((r) => setTimeout(r, 0));
+      online = false;
+      source.queues[1] = [];
+      source.queues[2] = [];
+      eq(source.next(2).id, 2);
+      await new Promise((r) => setTimeout(r, 0));
+      ok(source.pauseUntil > 0, "Fehler merkt sich eine Pause");
+      const before = asked.length;
+      source.next(2);
+      eq(asked.length, before, "nach einem Fehler erst einmal keine Nachfrage");
     });
 
-    await test("Waagennummern folgen dem Mischen", () => {
-      const round = makeRound({ s: ["b < a", "c < a", "d < a"], steps: [] }, 1, seededRandom(2));
-      const ch = pickCharacters(seededRandom(1));
-      eq(explain("Waage 1: b < a", round, ch).startsWith(`Waage ${round.order.indexOf(0) + 1}:`), true);
+    await test("Statistik: Antwort wird gemeldet, ohne id nicht", () => {
+      const sent = [];
+      const server = new PuzzleServer({ beacon: (url, body) => { sent.push([url, Object.fromEntries(body)]); return true; } });
+      server.report(42, "zeit", true, 1234.4);
+      server.report(null, "zeit", false, 10);
+      eq(sent, [["raetsel.php", { aktion: "antwort", id: "42", modus: "zeit", richtig: "1", ms: "1234.4" }]]);
+    });
+
+    await test("Statistik: Raetsel einer Stufe werden abgefragt", async () => {
+      const urls = [];
+      const server = new PuzzleServer({ fetchFn: async (url) => { urls.push(url); return { status: 200, json: async () => ({ ok: true, raetsel: [{ id: 5, s: ["b < a"] }] }) }; } });
+      eq((await server.batch(3, 20))[0].id, 5);
+      eq(urls, ["raetsel.php?stufe=3&anzahl=20"]);
     });
 
     await test("Quelle mischt neu, wenn alle Raetsel einer Stufe gespielt sind", () => {
-      const source = new RoundSource({ 1: [{ s: ["b < a", "c < a", "d < a"], steps: [] }] }, seededRandom(1));
+      const source = new RoundSource({ 1: [{ id: 7, s: ["b < a", "c < a", "d < a"] }] }, seededRandom(1));
       for (let i = 0; i < 3; i++) eq(source.next(1).level, 1);
     });
 

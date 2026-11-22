@@ -1,9 +1,11 @@
 <?php
-// Gemeinsame Bausteine fuer bestenliste.php.
+// Gemeinsame Bausteine fuer bestenliste.php, raetsel.php und verwaltung.php.
 //
 // - Datenbank: Zugangsdaten aus waagenspiel-config/db.ini, die AUSSERHALB der
 //   Webseiten liegt (wird von hier aus nach oben gesucht). Tabellen werden beim
 //   ersten Aufruf angelegt.
+// - Verwaltung (Raetsel einspielen, Sicherung): Schluessel aus
+//   waagenspiel-config/verwaltung.txt im selben Ordner.
 // - Kein Passwort, keine E-Mail, keine IP-Adressen.
 
 declare(strict_types=1);
@@ -38,16 +40,25 @@ function nur_post(): void {
 
 // --- Datenbank ---------------------------------------------------------------------
 
-function konfig_datei(): string {
+function konfig_datei(string $name = 'db.ini'): string {
     $ordner = __DIR__;
     for ($i = 0; $i < 8; $i++) {
-        $kandidat = $ordner . '/waagenspiel-config/db.ini';
+        $kandidat = $ordner . '/waagenspiel-config/' . $name;
         if (is_readable($kandidat)) {
             return $kandidat;
         }
         $ordner = dirname($ordner);
     }
-    fehler('Datenbank nicht eingerichtet', 500);
+    fehler('Nicht eingerichtet: ' . $name, 500);
+}
+
+/** Bricht ab, wenn der Kopf X-Waagenspiel-Verwaltung nicht den Verwaltungsschluessel traegt. */
+function verwaltung_pruefen(): void {
+    $soll = trim((string) file_get_contents(konfig_datei('verwaltung.txt')));
+    $ist = (string) ($_SERVER['HTTP_X_WAAGENSPIEL_VERWALTUNG'] ?? '');
+    if (strlen($soll) < 32 || !hash_equals($soll, $ist)) {
+        fehler('Kein Zugriff', 403);
+    }
 }
 
 /** Tabellenpraefix; eine Datei praefix.txt neben dieser Datei aendert es (fuer Tests). */
@@ -95,6 +106,15 @@ function tabellen_anlegen(PDO $pdo): void {
         erreicht DATETIME NOT NULL,
         KEY kategorie_punkte (kategorie, punkte)
     ) $opt");
+    raetsel_tabelle_anlegen($pdo, t('raetsel'));
+    $pdo->exec('CREATE TABLE IF NOT EXISTS ' . t('statistik') . " (
+        raetsel_id INT UNSIGNED NOT NULL,
+        modus VARCHAR(5) NOT NULL,
+        gespielt INT UNSIGNED NOT NULL DEFAULT 0,
+        richtig INT UNSIGNED NOT NULL DEFAULT 0,
+        zeit_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        PRIMARY KEY (raetsel_id, modus)
+    ) $opt");
     $pdo->exec('CREATE TABLE IF NOT EXISTS ' . t('marke') . " (
         kennung CHAR(32) PRIMARY KEY,
         benutzt DATETIME NOT NULL
@@ -103,6 +123,18 @@ function tabellen_anlegen(PDO $pdo): void {
         schluessel VARCHAR(40) PRIMARY KEY,
         wert TEXT NOT NULL
     ) $opt");
+}
+
+/** Raetsel aus dem Katalog: id = Position in data/katalog.json.gz, nr = laufende Nummer je Stufe. */
+function raetsel_tabelle_anlegen(PDO $pdo, string $name): void {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS $name (
+        id INT UNSIGNED PRIMARY KEY,
+        stufe TINYINT UNSIGNED NOT NULL,
+        nr INT UNSIGNED NOT NULL,
+        abkuerzung TINYINT UNSIGNED NOT NULL,
+        waagen VARCHAR(120) NOT NULL,
+        UNIQUE KEY stufe_nr (stufe, nr)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
 
 function jetzt(): string {
